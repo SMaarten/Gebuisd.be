@@ -3,182 +3,76 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Oefentoets wiskunde 1ste jaar: bewerkingen met positieve getallen. 20 meerkeuzevragen met verbetering en uitleg.">
-<title>Toets Positieve Getallen</title>
+<meta name="description" content="Oefentoetsen per vak en hoofdstuk: meerkeuzevragen met verbetering en uitleg.">
+<title>Gebuisd.be Oefentoetsen</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
-<style>
-/* Layout: één kolom als een toetsblad op ruitjespapier; vragen gegroepeerd per onderdeel, onderaan een vaste indienbalk. */
-:root {
-  --paper: #f7f9fc;
-  --sheet: #ffffff;
-  --grid: #e3e9f3;
-  --ink: #1b2540;
-  --muted: #5d6a85;
-  --line: #d5dceb;
-  --accent: #2f4fd8;
-  --accent-ink: #ffffff;
-  --marker: #ffe45c;
-  --ok: #17845a;
-  --ok-bg: #e2f5ec;
-  --bad: #c43a3a;
-  --bad-bg: #fbe7e7;
-  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #10141f; --sheet: #171d2c; --grid: #1c2335; --ink: #e6eaf5; --muted: #9aa5c0;
-    --line: #2b3550; --accent: #7d97ff; --accent-ink: #0d1222; --marker: #8a7a1c;
-    --ok: #4fd29b; --ok-bg: #12352a; --bad: #ff8585; --bad-bg: #3d1a1d; color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --paper: #10141f; --sheet: #171d2c; --grid: #1c2335; --ink: #e6eaf5; --muted: #9aa5c0;
-  --line: #2b3550; --accent: #7d97ff; --accent-ink: #0d1222; --marker: #8a7a1c;
-  --ok: #4fd29b; --ok-bg: #12352a; --bad: #ff8585; --bad-bg: #3d1a1d; color-scheme: dark;
-}
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; }
-body {
-  margin: 0;
-  background-color: var(--paper);
-  background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 24px 24px;
-  color: var(--ink);
-  font-family: var(--font-body);
-  font-size: 17px;
-  line-height: 1.5;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 24px 120px;
-}
-.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
-h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
-header.top { display: flex; flex-direction: column; gap: 6px; }
-.eyebrow { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
-h1 { font-size: clamp(28px, 6vw, 42px); font-weight: 800; line-height: 1.1; }
-h1 mark { background: linear-gradient(transparent 55%, var(--marker) 55%); color: inherit; padding: 0 2px; }
-.sub { color: var(--muted); margin: 0; }
-
-.panel { background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
-.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
-.controls .left, .controls .right { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-button { font: inherit; cursor: pointer; }
-.btn { border: 1px solid var(--line); background: var(--sheet); color: var(--ink); border-radius: 8px; padding: 9px 14px; font-weight: 700; }
-.btn:hover { border-color: var(--accent); }
-.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.btn:focus-visible, .opt:focus-visible, select:focus-visible { outline: 3px solid var(--marker); outline-offset: 2px; }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
-.timer { font-variant-numeric: tabular-nums; font-family: var(--font-display); font-weight: 800; font-size: 22px; min-width: 5ch; }
-.timer.warn { color: var(--bad); }
-label.lim { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 15px; }
-select { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--sheet); color: var(--ink); }
-
-.result { display: grid; grid-template-columns: auto 1fr; gap: 16px 24px; align-items: center; }
-.big { font-family: var(--font-display); font-weight: 800; font-size: 56px; line-height: 1; font-variant-numeric: tabular-nums; }
-.big small { font-size: 24px; color: var(--muted); }
-.result p { margin: 0; }
-.bysec { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
-.bysec div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
-.bysec b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
-
-section.sec { display: flex; flex-direction: column; gap: 12px; }
-section.sec > h2 { font-size: 20px; display: flex; gap: 10px; align-items: baseline; }
-.secnr { background: var(--ink); color: var(--sheet); font-size: 14px; padding: 2px 8px; border-radius: 4px; font-variant-numeric: tabular-nums; }
-
-.q { background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.q.right { border-color: var(--ok); }
-.q.wrong { border-color: var(--bad); }
-.qhead { display: flex; gap: 12px; align-items: flex-start; }
-.qnr { flex: none; width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; background: var(--grid); font-weight: 700; font-variant-numeric: tabular-nums; font-size: 15px; }
-.q.right .qnr { background: var(--ok); color: var(--sheet); }
-.q.wrong .qnr { background: var(--bad); color: var(--sheet); }
-.qtext { margin: 0; padding-top: 2px; min-width: 0; overflow-wrap: anywhere; }
-.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-@media (max-width: 560px) { .opts { grid-template-columns: 1fr; } .result { grid-template-columns: 1fr; } }
-.opt { display: flex; gap: 10px; align-items: center; text-align: left; border: 1px solid var(--line); background: var(--sheet); color: var(--ink); border-radius: 8px; padding: 9px 12px; min-width: 0; }
-.opt .letter { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--muted); display: grid; place-items: center; font-weight: 700; font-size: 14px; }
-.opt .val { min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
-.opt:hover:not(:disabled) { border-color: var(--accent); }
-.opt.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.opt.sel .letter { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.opt:disabled { cursor: default; }
-.opt.is-correct { background: var(--ok-bg); border-color: var(--ok); }
-.opt.is-correct .letter { background: var(--ok); border-color: var(--ok); color: var(--sheet); }
-.opt.is-wrong { background: var(--bad-bg); border-color: var(--bad); }
-.opt.is-wrong .letter { background: var(--bad); border-color: var(--bad); color: var(--sheet); }
-.expl { margin: 0; font-size: 15px; color: var(--ink); background: var(--grid); border-radius: 6px; padding: 10px 12px; }
-.expl b { color: var(--muted); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; margin-right: 6px; }
-
-.bar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
-  background: var(--sheet); border-top: 1px solid var(--line);
-  padding-top: 12px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-}
-.bar .in { max-width: 760px; margin: 0 auto; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-.progress { flex: 1 1 200px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
-.track { height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
-.track i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
-.confirm { font-size: 14px; color: var(--bad); }
-
-.hist h3 { font-size: 17px; margin-bottom: 10px; }
-.hist ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.hist li { display: grid; grid-template-columns: 9.5em 1fr 3.2em 4em; gap: 10px; align-items: center; font-size: 14px; font-variant-numeric: tabular-nums; }
-.hist .hb { height: 10px; border-radius: 5px; background: var(--grid); overflow: hidden; }
-.hist .hb i { display: block; height: 100%; background: var(--accent); }
-.hist .empty { color: var(--muted); font-size: 15px; margin: 0; }
-.hist .muted { color: var(--muted); }
-.linkbtn { background: none; border: none; color: var(--muted); text-decoration: underline; padding: 0; font-size: 14px; }
-@media (max-width: 480px) { .hist li { grid-template-columns: 7.5em 1fr 3em; } .hist li .t { display: none; } }
-@media (prefers-reduced-motion: reduce) { .track i { transition: none; } }
-</style>
-
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div class="wrap">
-  <header class="top">
-    <span class="eyebrow">Wiskunde · 1ste jaar · Hoofdstuk 3</span>
-    <h1>Bewerkingen met <mark>positieve getallen</mark></h1>
-    <p class="sub">20 meerkeuzevragen, 4 per onderdeel. Zonder rekentoestel. Kladpapier mag.</p>
-  </header>
+  <nav class="crumbs" id="crumbs" aria-label="Kruimelpad"></nav>
 
-  <div class="panel controls">
-    <div class="left">
-      <button class="btn primary" id="newBtn" type="button">Nieuwe vragen</button>
-      <label class="lim" for="limit">Tijdslimiet
-        <select id="limit">
-          <option value="0">geen</option>
-          <option value="15">15 min</option>
-          <option value="20">20 min</option>
-          <option value="30">30 min</option>
-          <option value="45">45 min</option>
-        </select>
-      </label>
+  <!-- Startpagina: vakken en hoofdstukken -->
+  <main id="viewHome" hidden>
+    <header class="top">
+      <span class="eyebrow">Gebuisd.be · oefentoetsen</span>
+      <h1>Kies een <mark>hoofdstuk</mark></h1>
+      <p class="sub">Elke toets trekt nieuwe meerkeuzevragen uit de vragenbank. Na het indienen zie je de verbetering met uitleg.</p>
+    </header>
+    <div id="catalog" class="catalog"></div>
+    <div class="panel addbox">
+      <div>
+        <h3>Nieuw vak of hoofdstuk</h3>
+        <p class="sub">Upload de cursus als PDF of foto's. Claude maakt er een vragenbank van, die je nakijkt en daarna online zet.</p>
+      </div>
+      <a class="btn primary" href="#/beheer">+ Hoofdstuk toevoegen</a>
     </div>
-    <div class="right">
-      <span class="timer" id="timer" aria-live="off">0:00</span>
+  </main>
+
+  <!-- Toets -->
+  <main id="viewTest" hidden>
+    <header class="top">
+      <span class="eyebrow" id="tEyebrow"></span>
+      <h1 id="tTitle"></h1>
+      <p class="sub" id="tSub"></p>
+    </header>
+
+    <div class="panel controls">
+      <div class="left">
+        <button class="btn primary" id="newBtn" type="button">Nieuwe vragen</button>
+        <label class="lim" for="limit">Tijdslimiet
+          <select id="limit">
+            <option value="0">geen</option>
+            <option value="10">10 min</option>
+            <option value="15">15 min</option>
+            <option value="20">20 min</option>
+            <option value="30">30 min</option>
+            <option value="45">45 min</option>
+          </select>
+        </label>
+      </div>
+      <div class="right">
+        <span class="timer" id="timer" aria-live="off">0:00</span>
+      </div>
     </div>
-  </div>
 
-  <div class="panel result" id="result" hidden></div>
+    <div class="panel result" id="result" hidden></div>
+    <div id="test"></div>
+    <div class="panel hist" id="hist"></div>
+  </main>
 
-  <div id="test"></div>
+  <!-- Beheer -->
+  <main id="viewAdmin" hidden></main>
 
-  <div class="panel hist" id="hist"></div>
+  <p class="panel msg" id="loadMsg" hidden></p>
 </div>
 
-<div class="bar" id="bar">
+<div class="bar" id="bar" hidden>
   <div class="in">
     <div class="progress">
-      <span id="progText">0 van 20 beantwoord</span>
+      <span id="progText"></span>
       <div class="track"><i id="progBar"></i></div>
     </div>
     <span class="confirm" id="confirmMsg" hidden></span>
@@ -186,464 +80,6 @@ section.sec > h2 { font-size: 20px; display: flex; gap: 10px; align-items: basel
   </div>
 </div>
 
-<script>
-const SECTIONS = {
-  1: "Ordenen en de getallenas",
-  2: "De vier hoofdbewerkingen",
-  3: "Eigenschappen van de bewerkingen",
-  4: "Volgorde van de bewerkingen",
-  5: "Machten en vierkantswortels"
-};
-
-// [onderdeel, vraag, [juist, fout, fout, fout], uitleg]
-const BANK = [
-// ---------- 3.1 Ordenen ----------
-[1,"Welk getal is het kleinst?",["52,000 9","52,001","52,01","52,1"],"Gelijk aantal gehelen (52). Vergelijk cijfer per cijfer na de komma: 52,000 9 heeft op de derde decimaal een 0, 52,001 een 1."],
-[1,"Welk symbool hoort op de plaats van de puntjes?  1,011 … 1,001",[">","<","=","≤"],"Gehelen gelijk, eerste decimaal gelijk (0). Tweede decimaal: 1 > 0, dus 1,011 > 1,001."],
-[1,"Welk symbool hoort op de plaats van de puntjes?  0,009 … 0,008 9",[">","<","=","≤"],"Schrijf 0,009 als 0,009 0. Op de derde decimaal: 9 > 8, dus 0,009 > 0,008 9."],
-[1,"Welk symbool hoort op de plaats van de puntjes?  3,68 … 3,8",["<",">","=","≥"],"Gehelen gelijk (3). Eerste decimaal: 6 < 8, dus 3,68 < 3,8."],
-[1,"Wat betekent het symbool ≤ ?",["is kleiner dan of gelijk aan","is groter dan of gelijk aan","is niet gelijk aan","is veel kleiner dan"],"≤ betekent 'is kleiner dan of gelijk aan'."],
-[1,"Wat betekent het symbool ≠ ?",["is niet gelijk aan","is ongeveer gelijk aan","is kleiner dan of gelijk aan","is groter dan"],"≠ betekent 'is niet gelijk aan'."],
-[1,"Hoe schrijf je 'x is groter dan of gelijk aan 4'?",["x ≥ 4","x > 4","x ≤ 4","x ≠ 4"],"'Groter dan of gelijk aan' is het symbool ≥."],
-[1,"Welke natuurlijke getallen n voldoen aan 5,1 < n < 8,3?",["6, 7 en 8","5, 6, 7 en 8","6 en 7","6, 7, 8 en 9"],"n moet groter zijn dan 5,1 en kleiner dan 8,3. De natuurlijke getallen daartussen zijn 6, 7 en 8."],
-[1,"Welke natuurlijke getallen n voldoen aan 5 < n < 6?",["geen enkel","5","6","5 en 6"],"Tussen 5 en 6 ligt geen enkel natuurlijk getal, en 5 en 6 zelf tellen niet mee (strikt kleiner/groter)."],
-[1,"Welke natuurlijke getallen n voldoen aan 5 < n ≤ 6?",["6","5","5 en 6","geen enkel"],"5 telt niet mee (<), 6 wel (≤). Enkel 6 voldoet."],
-[1,"Welke natuurlijke getallen n voldoen aan 3 ≤ n < 4?",["3","4","3 en 4","geen enkel"],"3 telt mee (≤), 4 niet (<). Enkel 3 voldoet."],
-[1,"Welke natuurlijke getallen n voldoen aan 5,009 ≥ n > 0?",["1, 2, 3, 4 en 5","0, 1, 2, 3, 4 en 5","1, 2, 3 en 4","geen enkel"],"n moet groter zijn dan 0 (dus 0 niet) en hoogstens 5,009. Dat zijn 1, 2, 3, 4 en 5."],
-[1,"Hoeveel natuurlijke getallen n voldoen aan 16 ≥ n ≥ 12,03?",["4","5","3","6"],"Dat zijn 13, 14, 15 en 16: vier getallen. 12 is kleiner dan 12,03 en telt dus niet mee."],
-[1,"Wat is het grootste natuurlijke getal dat kleiner is dan 10,99?",["10","11","10,9","9"],"Natuurlijke getallen hebben geen decimalen. 11 is te groot, dus 10."],
-[1,"Hoeveel decimale getallen met één decimaal liggen strikt tussen 1,1 en 2?",["8","9","10","7"],"Dat zijn 1,2 · 1,3 · 1,4 · 1,5 · 1,6 · 1,7 · 1,8 · 1,9: acht getallen."],
-[1,"Wat is het grootste getal met één decimaal waarvoor 2,2 < d < 3?",["2,9","3,0","2,99","2,8"],"3,0 = 3 mag niet (strikt kleiner). 2,99 heeft twee decimalen. Het grootste is 2,9."],
-[1,"Wat is het grootste getal met één decimaal waarvoor 9,8 < d ≤ 10,3?",["10,3","10,2","10,4","9,9"],"10,3 mag (≤). Het grootste getal met één decimaal is dus 10,3."],
-[1,"Hoeveel getallen met één decimaal liggen strikt tussen 0,4 en 0,5?",["geen enkel","1","9","10"],"Na 0,4 komt met één decimaal meteen 0,5. Daartussen ligt geen getal met één decimaal."],
-[1,"Welke rangschikking van klein naar groot is juist?",["3,24 < 3,42 < 32,3 < 32,4","3,42 < 3,24 < 32,3 < 32,4","3,24 < 32,3 < 3,42 < 32,4","32,4 < 32,3 < 3,42 < 3,24"],"Eerst kijken naar de gehelen (3 en 32), dan naar de decimalen."],
-[1,"Welke rangschikking van klein naar groot is juist?",["4,474 < 4,74 < 4,774","4,74 < 4,474 < 4,774","4,774 < 4,74 < 4,474","4,474 < 4,774 < 4,74"],"Eerste decimalen: 4, 7, 7. Dus 4,474 is het kleinst. Bij 4,74 en 4,774 beslist de tweede decimaal: 4 < 7."],
-[1,"Welke rangschikking van groot naar klein is juist?",["70,64 > 70,46 > 7,46 > 7,064","70,46 > 70,64 > 7,46 > 7,064","7,46 > 7,064 > 70,64 > 70,46","70,64 > 7,46 > 70,46 > 7,064"],"Eerst de gehelen: 70 > 7. Daarna de decimalen: 0,64 > 0,46 en 0,46 > 0,064."],
-[1,"Welke uitspraak is juist?",["12,58 < 12,85","12,85 < 12,58","115,28 > 115,82","15,82 > 112,58"],"Bij 12,58 en 12,85 beslist de eerste decimaal: 5 < 8."],
-[1,"Welke uitspraak is waar?",["7 ≤ 7","7 < 7","7 ≠ 7","7 > 7"],"≤ betekent 'kleiner dan of gelijk aan'. 7 is gelijk aan 7, dus 7 ≤ 7 is waar."],
-[1,"Welk getal is het kleinst?",["0,000 54","0,004 5","0,045","0,054"],"Tel de nullen na de komma: 0,000 54 begint pas op de vierde decimaal en is het kleinst."],
-[1,"Welk getal ligt het verst naar rechts op de getallenas?",["0,5","0,49","0,099","0,45"],"Hoe verder naar rechts, hoe groter. 0,5 = 0,50 is het grootst."],
-[1,"Welk getal ligt het dichtst bij 0 op de getallenas?",["0,008 5","0,009","0,01","0,085"],"Het kleinste getal ligt het dichtst bij 0. Op de derde decimaal: 0,008 5 heeft een 8, 0,009 een 9."],
-[1,"Een sterretje ★ stelt één cijfer voor. Welke cijfers kunnen op de plaats van ★ in 23,★3 < 23,42?",["0, 1, 2 of 3","0, 1, 2, 3 of 4","4, 5, 6, 7, 8 of 9","alleen 3"],"Is ★ kleiner dan 4, dan is het getal kleiner. Bij ★ = 4 krijg je 23,43, en dat is groter dan 23,42."],
-[1,"Op een getallenas staan de getallen van links naar rechts geordend …",["van klein naar groot","van groot naar klein","willekeurig","per tiental"],"De pijl wijst naar rechts: daar worden de getallen groter."],
-[1,"Waarvoor dient de pijl op een getallenas?",["Hij toont in welke richting de getallen groter worden","Hij toont waar 0 ligt","Hij toont de ijk","Hij toont het grootste getal"],"De pijl duidt aan in welke richting de getallen in waarde toenemen."],
-[1,"Hoe noemen we de twee getallen (meestal 0 en 1) die bepalen waar alle andere getallen op de getallenas komen?",["de ijk","de pijl","de termen","het grondtal"],"Twee getallen die de ijk vormen. De afstand ertussen bepaalt de plaats van alle andere getallen."],
-[1,"Tussen 0 en 1 op een getallenas staan 10 gelijke vakjes. Hoeveel is één vakje waard?",["0,1","1","0,01","10"],"1 verdeeld in 10 gelijke stukken: elk stuk is 1 : 10 = 0,1."],
-[1,"Tussen 2 en 3 zijn 4 gelijke stukken. Welk getal hoort bij het punt 3 stukken rechts van 2?",["2,75","2,3","2,6","2,25"],"Eén stuk is 1 : 4 = 0,25. Drie stukken: 0,75. Dus 2 + 0,75 = 2,75."],
-[1,"Welk getal ligt precies in het midden tussen 6 en 7?",["6,5","6,05","6,1","7,5"],"Het midden tussen twee opeenvolgende gehelen is het geheel + 0,5."],
-[1,"Welk getal ligt precies in het midden tussen 1,2 en 1,3?",["1,25","1,5","1,22","1,35"],"Schrijf 1,20 en 1,30. Het midden is 1,25."],
-[1,"Welk getal ligt tussen 3,7 en 3,8?",["3,75","3,08","3,85","3,69"],"3,75 = 3,750 ligt tussen 3,700 en 3,800."],
-[1,"Op een getallenas staan 1990 en 2000 vijf vakjes uit elkaar. Hoeveel is één vakje waard?",["2","5","10","1"],"Het verschil is 10, verdeeld over 5 vakjes: 10 : 5 = 2."],
-
-// ---------- 3.2 Vier hoofdbewerkingen ----------
-[2,"In 72,5 + 18,3 = 90,8 noemen we 90,8 …",["de som","het verschil","het product","een term"],"Bij een optelling heten de getallen die je optelt termen; het resultaat is de som."],
-[2,"In 90,8 − 18,3 = 72,5 noemen we 18,3 …",["de aftrekker","het aftrektal","het verschil","een factor"],"Aftrektal − aftrekker = verschil. 18,3 is de aftrekker."],
-[2,"In 90,8 − 18,3 = 72,5 noemen we 90,8 …",["het aftrektal","de aftrekker","het verschil","de som"],"Aftrektal − aftrekker = verschil. 90,8 is het aftrektal."],
-[2,"In 90,8 − 18,3 = 72,5 noemen we 72,5 …",["het verschil","het aftrektal","de som","het quotiënt"],"Het resultaat van een aftrekking heet het verschil."],
-[2,"In 18,5 · 1,5 = 27,75 noemen we 18,5 en 1,5 …",["factoren","termen","delers","machten"],"De getallen die je vermenigvuldigt heten factoren; het resultaat is het product."],
-[2,"In 18,5 · 1,5 = 27,75 noemen we 27,75 …",["het product","de som","het quotiënt","een factor"],"Het resultaat van een vermenigvuldiging heet het product."],
-[2,"In 98 : 4 = 24,5 noemen we 4 …",["de deler","het deeltal","het quotiënt","een factor"],"Deeltal : deler = quotiënt. 4 is de deler."],
-[2,"In 98 : 4 = 24,5 noemen we 98 …",["het deeltal","de deler","het quotiënt","het product"],"Deeltal : deler = quotiënt. 98 is het deeltal."],
-[2,"In 98 : 4 = 24,5 noemen we 24,5 …",["het quotiënt","het deeltal","de deler","het verschil"],"Het resultaat van een deling heet het quotiënt."],
-[2,"Waarom bestaat 5 : 0 niet?",["Geen enkel getal maal 0 geeft 5","Omdat het antwoord 0 is","Omdat het antwoord 5 is","Omdat 0 geen getal is"],"Delen door 0 gaat niet: je kan 5 nooit schrijven als het product van 0 en een ander getal."],
-[2,"Welke bewerkingen noemen we de vier hoofdbewerkingen?",["optelling, aftrekking, vermenigvuldiging, deling","optelling, aftrekking, machten, wortels","vermenigvuldiging, deling, machten, wortels","optelling, vermenigvuldiging, machten, deling"],"De optelling, de aftrekking, de vermenigvuldiging en de deling zijn de vier hoofdbewerkingen."],
-[2,"Hoe schrijf je 5 + 5 + 5 + 5 korter?",["4 · 5","5 · 5","5⁴","4 + 5"],"Een som van gelijke termen schrijf je als een product: 4 termen gelijk aan 5 geeft 4 · 5."],
-[2,"Hoe schrijf je 4,1 + 4,1 + 4,1 + 4,1 + 4,1 + 4,1 + 4,1 korter?",["7 · 4,1","4,1⁷","7 + 4,1","4,1 · 4,1"],"7 gelijke termen 4,1 schrijf je als 7 · 4,1."],
-[2,"Als 47 + 12 = 59, dan is ook …",["59 − 12 = 47","59 + 12 = 47","47 − 12 = 59","12 − 59 = 47"],"Optellen en aftrekken horen bij elkaar: wat je optelt, kan je weer aftrekken."],
-[2,"Als 160 : 5 = 32, dan is ook …",["32 · 5 = 160","32 : 5 = 160","160 · 5 = 32","5 : 32 = 160"],"Delen en vermenigvuldigen horen bij elkaar: 160 : 5 = 32 want 32 · 5 = 160."],
-[2,"Vul aan door terug te rekenen:  … + 18 = 49",["31","67","41","21"],"Terugrekenen: 49 − 18 = 31. Controle: 31 + 18 = 49."],
-[2,"Vul aan door terug te rekenen:  … − 8 = 14",["22","6","112","21"],"Terugrekenen: 14 + 8 = 22. Controle: 22 − 8 = 14."],
-[2,"Vul aan door terug te rekenen:  … · 7 = 98",["14","91","686","15"],"Terugrekenen: 98 : 7 = 14. Controle: 14 · 7 = 98."],
-[2,"Vul aan door terug te rekenen:  … : 4 = 13",["52","9","17","3,25"],"Terugrekenen: 13 · 4 = 52. Controle: 52 : 4 = 13."],
-[2,"Vul aan door terug te rekenen:  … − 19 = 58",["77","39","67","87"],"Terugrekenen: 58 + 19 = 77."],
-[2,"Vul aan door terug te rekenen:  … : 3 = 135",["405","45","138","315"],"Terugrekenen: 135 · 3 = 405."],
-[2,"Vul aan door terug te rekenen:  … · 5 = 160",["32","800","155","30"],"Terugrekenen: 160 : 5 = 32."],
-[2,"Vul aan door terug te rekenen:  … + 31 = 235",["204","266","214","194"],"Terugrekenen: 235 − 31 = 204."],
-[2,"Vul aan door terug te rekenen:  … : 0,5 = 200",["100","400","199,5","250"],"Terugrekenen: 200 · 0,5 = 100. Controle: 100 : 0,5 = 200."],
-[2,"Bij een optelling is de tweede term 15 en de som 35,2. Wat is de eerste term?",["20,2","50,2","21,2","20,8"],"Terugrekenen: 35,2 − 15 = 20,2."],
-[2,"Bij een aftrekking is de aftrekker 13 en het verschil 25,3. Wat is het aftrektal?",["38,3","12,3","37,3","39,3"],"Terugrekenen: 25,3 + 13 = 38,3."],
-[2,"Bij een vermenigvuldiging is de tweede factor 11 en het product 159,5. Wat is de eerste factor?",["14,5","148,5","15,5","13,5"],"Terugrekenen: 159,5 : 11 = 14,5. Controle: 14,5 · 11 = 145 + 14,5 = 159,5."],
-[2,"Bij een deling is de deler 4 en het quotiënt 2,5. Wat is het deeltal?",["10","1,6","6,5","0,625"],"Terugrekenen: 2,5 · 4 = 10."],
-[2,"Bereken zonder rekentoestel: 127 − 39",["88","98","92","86"],"127 − 40 = 87, en je trok er 1 te veel af: 87 + 1 = 88."],
-[2,"Bereken zonder rekentoestel: 72 · 6",["432","422","442","412"],"70 · 6 = 420 en 2 · 6 = 12. Samen 432."],
-[2,"Bereken zonder rekentoestel: 91 : 7",["13","12","14","11"],"7 · 13 = 91."],
-[2,"Bereken zonder rekentoestel: 4,5 · 8",["36","32,5","32","3,6"],"4 · 8 = 32 en 0,5 · 8 = 4. Samen 36."],
-[2,"Bereken zonder rekentoestel: 107,5 : 5",["21,5","2,15","21,05","20,5"],"100 : 5 = 20 en 7,5 : 5 = 1,5. Samen 21,5."],
-[2,"Bereken zonder rekentoestel: 99,5 − 18",["81,5","81","80,5","117,5"],"99,5 − 18 = 81,5."],
-[2,"Ante koopt 6 dozen melk van € 0,50. Hoeveel betaalt hij?",["€ 3,00","€ 3,50","€ 2,50","€ 0,30"],"Snel rekenen met een vermenigvuldiging: 6 · 0,50 = 3,00."],
-[2,"Leerlingen kopen 2 kg druiven (€ 2,50 per kg), bananen (€ 2,40), 6 kiwi's (€ 0,50 per stuk) en een ananas (€ 3,50). Hoeveel krijgen ze terug van € 20?",["€ 6,10","€ 7,10","€ 6,90","€ 13,90"],"Totaal: 5 + 2,40 + 3 + 3,50 = 13,90. Terug: 20 − 13,90 = 6,10."],
-[2,"Zita verdeelt 126 snoepjes eerlijk over 18 leerlingen. Hoeveel krijgt elk?",["7","8","6","9"],"126 : 18 = 7, want 18 · 7 = 126."],
-[2,"Kato deelt 168 letterkoekjes uit. Elke leerling krijgt er 8. Hoeveel leerlingen zijn er?",["21","20","22","18"],"168 : 8 = 21, want 8 · 21 = 168."],
-[2,"Op een bus stappen bij de eerste halte 3 mensen af en 5 op. Bij de volgende halte stappen er 10 op en 7 af. Aan de eindhalte stappen de 30 overige passagiers af. Hoeveel mensen zaten er op de bus vóór de eerste halte?",["25","30","28","22"],"Reken terug vanaf 30: +7 −10 geeft 27, dan −5 +3 geeft 25."],
-[2,"De som van drie verschillende natuurlijke getallen (verschillend van 0) is 7. Wat is hun product?",["8","10","12","6"],"De enige mogelijkheid is 1 + 2 + 4 = 7. Het product is 1 · 2 · 4 = 8."],
-[2,"In een bioscoop betalen 350 mensen € 8,80 en 150 mensen € 7,80. Hoeveel brengt de vertoning op?",["€ 4 250","€ 4 400","€ 3 900","€ 4 150"],"350 · 8,80 = 3 080 en 150 · 7,80 = 1 170. Samen 4 250."],
-[2,"Youssef heeft € 20. Elk van zijn vier broers heeft € 10. Hoeveel euro moet Youssef aan elke broer geven zodat ze alle vijf evenveel hebben?",["2","3","4","5"],"Samen 20 + 40 = 60 euro, verdeeld over 5: elk 12. Elke broer krijgt dus 2 euro."],
-
-// ---------- 3.3 Eigenschappen ----------
-[3,"Welke eigenschap zie je in 8 + 9 = 9 + 8?",["De optelling is commutatief","De optelling is associatief","De vermenigvuldiging is distributief","0 is het neutraal element"],"De volgorde van de termen wisselen: dat is commutativiteit."],
-[3,"Welke eigenschap zie je in 5 + (1 + 7) = (5 + 1) + 7?",["De optelling is associatief","De optelling is commutatief","De vermenigvuldiging is distributief","1 is het neutraal element"],"De haakjes verplaatsen zonder dat het resultaat verandert: associativiteit."],
-[3,"Welke eigenschap zie je in 6 · 3 = 3 · 6?",["De vermenigvuldiging is commutatief","De vermenigvuldiging is associatief","De vermenigvuldiging is distributief","De optelling is commutatief"],"De volgorde van de factoren wisselen: commutativiteit van de vermenigvuldiging."],
-[3,"Welke eigenschap zie je in (8 · 2) · 4 = 8 · (2 · 4)?",["De vermenigvuldiging is associatief","De vermenigvuldiging is commutatief","De vermenigvuldiging is distributief","De optelling is associatief"],"De haakjes verplaatsen bij een vermenigvuldiging: associativiteit."],
-[3,"Welke eigenschap zie je in 7 · (3 − 1) = 7 · 3 − 7 · 1?",["Distributiviteit t.o.v. de aftrekking","Distributiviteit t.o.v. de optelling","Associativiteit van de vermenigvuldiging","Commutativiteit van de aftrekking"],"Je vermenigvuldigt 7 met elk getal van het verschil: distributiviteit t.o.v. de aftrekking."],
-[3,"Welke eigenschap zie je in 7 · (3 + 1) = 7 · 3 + 7 · 1?",["Distributiviteit t.o.v. de optelling","Associativiteit van de optelling","Commutativiteit van de vermenigvuldiging","1 is het neutraal element"],"Je vermenigvuldigt 7 met elke term van de som: distributiviteit t.o.v. de optelling."],
-[3,"Welke eigenschap zie je in 0 + 15 = 15?",["0 is het neutraal element voor de optelling","0 is het opslorpend element","1 is het neutraal element","De optelling is commutatief"],"0 optellen heeft geen effect op het getal: 0 is neutraal voor de optelling."],
-[3,"Welke eigenschap zie je in 8 · 1 = 8?",["1 is het neutraal element voor de vermenigvuldiging","0 is het neutraal element voor de optelling","1 is het opslorpend element","De vermenigvuldiging is commutatief"],"Vermenigvuldigen met 1 verandert het getal niet: 1 is neutraal voor de vermenigvuldiging."],
-[3,"Waarom is 5 · 4 · 3 · 2 · 1 · 0 = 0?",["0 is het opslorpend element voor de vermenigvuldiging","0 is het neutraal element voor de optelling","1 is het neutraal element","De vermenigvuldiging is associatief"],"Vermenigvuldig je met 0, dan is het product altijd 0: 0 is opslorpend."],
-[3,"Welke bewerkingen in ℕ zijn commutatief?",["de optelling en de vermenigvuldiging","alle vier de hoofdbewerkingen","de aftrekking en de deling","enkel de optelling"],"Bij optellen en vermenigvuldigen mag je de volgorde wisselen. Bij aftrekken en delen niet."],
-[3,"Welke bewerkingen in ℕ zijn associatief?",["de optelling en de vermenigvuldiging","de aftrekking en de deling","enkel de vermenigvuldiging","alle vier de hoofdbewerkingen"],"Enkel bij optellen en vermenigvuldigen mag je de haakjes verplaatsen."],
-[3,"Welke bewering is waar?",["9 − 1 ≠ 1 − 9","12 : 2 = 2 : 12","(10 − 4) − 3 = 10 − (4 − 3)","(24 : 6) : 2 = 24 : (6 : 2)"],"De aftrekking en de deling zijn niet commutatief en niet associatief."],
-[3,"Het woord 'commutatief' komt van het Latijnse 'commutare'. Wat betekent dat?",["verwisselen","samenbrengen","verdelen","vermenigvuldigen"],"Commutare = verwisselen: je mag de getallen van plaats wisselen."],
-[3,"Het woord 'associatief' verwijst naar 'associëren'. Wat betekent dat?",["samenbrengen","verwisselen","verdelen","weglaten"],"Associëren = samenbrengen: je mag kiezen welke getallen je eerst samenneemt."],
-[3,"Het woord 'distributief' komt van het Latijnse 'distribuere'. Wat betekent dat?",["verdelen","verwisselen","samenbrengen","vermenigvuldigen"],"Distribuere = verdelen: de factor wordt over elke term verdeeld."],
-[3,"Hoe lees je het symbool ∀ ?",["voor alle","er bestaat","is element van","is ongeveer gelijk aan"],"∀ lezen we als 'voor alle'."],
-[3,"Welke formule beschrijft de distributiviteit?",["a · (b + c) = a · b + a · c","a + b = b + a","(a + b) + c = a + (b + c)","a · 1 = a"],"Distributiviteit: een getal maal een som = dat getal maal elke term."],
-[3,"Waaraan is a · (b − c) gelijk?",["a · b − a · c","a · b − c","a − b · c","a · b · c"],"Distributiviteit t.o.v. de aftrekking: vermenigvuldig a met b én met c."],
-[3,"Bereken met de distributieve eigenschap: 18 · (10 + 3)",["234","183","244","198"],"18 · 10 + 18 · 3 = 180 + 54 = 234."],
-[3,"Bereken handig: 25 · 7 · 4",["700","725","175","7 000"],"Wissel de volgorde: 25 · 4 = 100, en 100 · 7 = 700."],
-[3,"Bereken handig: 37 + 25 + 43 + 15",["120","110","130","115"],"Neem samen wat mooi uitkomt: 37 + 43 = 80 en 25 + 15 = 40. Samen 120."],
-[3,"Bereken handig: 5 · 17 · 2",["170","85","150","117"],"5 · 2 = 10, en 10 · 17 = 170."],
-[3,"Bereken handig: 13 + 29 + 17",["59","69","49","58"],"13 + 17 = 30, en 30 + 29 = 59."],
-[3,"Bereken handig: 8 · 97",["776","796","786","756"],"8 · (100 − 3) = 800 − 24 = 776."],
-[3,"Bereken handig: 42 · 9",["378","368","388","420"],"42 · (10 − 1) = 420 − 42 = 378."],
-[3,"Bereken handig: 45 · 11",["495","455","505","485"],"45 · (10 + 1) = 450 + 45 = 495."],
-[3,"Bereken handig: 102 · 16",["1 632","1 622","1 602","1 712"],"16 · (100 + 2) = 1 600 + 32 = 1 632."],
-[3,"Bereken handig: 98 · 6",["588","598","578","608"],"6 · (100 − 2) = 600 − 12 = 588."],
-[3,"Bereken handig: 56 · 8 · 125",["56 000","5 600","560 000","7 000"],"8 · 125 = 1 000, dus 56 · 1 000 = 56 000."],
-[3,"Als je weet dat 6 + a = 6, waaraan is a dan gelijk?",["0","1","6","12"],"0 is het neutraal element voor de optelling."],
-[3,"De letter b is een natuurlijk getal waarvoor b · 7 = 7. Waaraan is b gelijk?",["1","0","7","49"],"1 is het neutraal element voor de vermenigvuldiging."],
-[3,"De letter c is een natuurlijk getal waarvoor c · 12 = 0. Waaraan is c gelijk?",["0","1","12","elk getal"],"Een product is enkel 0 als een factor 0 is (0 is opslorpend)."],
-[3,"Welke uitdrukking geeft hetzelfde resultaat als (48 + 6) · 2?",["48 · 2 + 6 · 2","48 + 6 · 2","48 · 2 + 6","48 · 6 · 2"],"Distributiviteit: beide termen worden met 2 vermenigvuldigd."],
-[3,"Welke uitdrukking geeft hetzelfde resultaat als (48 − 6) : 2?",["48 : 2 − 6 : 2","48 − 6 : 2","48 : 2 − 6","2 : 48 − 2 : 6"],"Ook bij een deling door 2 mag je elk getal van het verschil apart delen."],
-[3,"Welke uitdrukking geeft hetzelfde resultaat als (48 : 6) : 2?",["48 : (6 · 2)","48 : (6 : 2)","48 : 6 · 2","(48 : 2) : (6 : 2)"],"Eerst door 6 en dan door 2 delen is hetzelfde als door 12 delen: 8 : 2 = 4 en 48 : 12 = 4."],
-[3,"Welke uitdrukking geeft hetzelfde resultaat als 48 − 6 − 2?",["48 − (6 + 2)","48 − (6 − 2)","(48 − 6) + 2","48 − 6 + 2"],"Eerst 6 en dan 2 aftrekken is hetzelfde als 8 aftrekken."],
-[3,"Een rechthoek van 5 bij 13 bestaat uit een stuk van 5 bij 10 en een stuk van 5 bij 3. Dus 5 · (10 + 3) = 5 · 10 + 5 · 3. Welke eigenschap is dit?",["distributiviteit","commutativiteit","associativiteit","neutraal element"],"De factor 5 wordt over beide termen verdeeld: distributiviteit."],
-
-// ---------- 3.4 Volgorde van de bewerkingen ----------
-[4,"Wat bereken je eerst in 48 : (4 + 2) − 4 + 6 : 2?",["4 + 2","48 : 4","6 : 2","2 − 4"],"Altijd eerst de bewerkingen tussen de haakjes."],
-[4,"Welke volgorde is juist als er geen haakjes, machten of wortels zijn?",["eerst · en : van links naar rechts, dan + en − van links naar rechts","eerst + en −, dan · en :","alles gewoon van links naar rechts","eerst :, dan ·, dan −, dan +"],"Eerst vermenigvuldigen en delen (van links naar rechts), daarna optellen en aftrekken (van links naar rechts)."],
-[4,"Bereken: 48 : (4 + 2) − 4 + 6 : 2",["7","1","11","5"],"48 : 6 − 4 + 6 : 2 = 8 − 4 + 3 = 7."],
-[4,"Bereken: 21 + 3 · 5",["36","120","39","35"],"Eerst vermenigvuldigen: 3 · 5 = 15. Dan 21 + 15 = 36."],
-[4,"Bereken: 200 : 10 + 10",["30","10","21","20"],"Eerst delen: 200 : 10 = 20. Dan 20 + 10 = 30."],
-[4,"Bereken: 18 − 5 − 3",["10","16","12","8"],"Van links naar rechts: 18 − 5 = 13, 13 − 3 = 10."],
-[4,"Bereken: (24 + 3) · 5",["135","39","125","145"],"Eerst de haakjes: 27. Dan 27 · 5 = 135."],
-[4,"Bereken: 16 + 10 · 8",["96","208","106","34"],"Eerst 10 · 8 = 80. Dan 16 + 80 = 96."],
-[4,"Bereken: 15 − 8 : 2",["11","3,5","7","13"],"Eerst 8 : 2 = 4. Dan 15 − 4 = 11."],
-[4,"Bereken: 150 − 10 · 2",["130","280","140","120"],"Eerst 10 · 2 = 20. Dan 150 − 20 = 130."],
-[4,"Bereken: 150 : (10 · 2)",["7,5","30","15","75"],"Eerst de haakjes: 20. Dan 150 : 20 = 7,5."],
-[4,"Bereken: 5 · 30 − 7",["143","115","157","153"],"Eerst 5 · 30 = 150. Dan 150 − 7 = 143."],
-[4,"Bereken: 5 · (30 − 7)",["115","143","157","125"],"Eerst de haakjes: 23. Dan 5 · 23 = 115."],
-[4,"Bereken: 28 − 4 + 5",["29","19","27","37"],"Van links naar rechts: 28 − 4 = 24, 24 + 5 = 29."],
-[4,"Bereken: (200 − 10) : 5",["38","198","40","36"],"Eerst de haakjes: 190. Dan 190 : 5 = 38."],
-[4,"Bereken: 100 − 20 · 0 + 8 · 3",["124","264","76","104"],"20 · 0 = 0 en 8 · 3 = 24. Dan 100 − 0 + 24 = 124."],
-[4,"Bereken: 88 : 11 + 4 · 6 − 28 : 7",["28","32","20","44"],"8 + 24 − 4 = 28."],
-[4,"Bereken: (16 − 4) · 5 − 3 · 5",["45","285","0","55"],"12 · 5 − 15 = 60 − 15 = 45."],
-[4,"Bereken: 62 − 6 · 8 + 12 : 2 · 3",["32","20","16","34"],"6 · 8 = 48 en 12 : 2 · 3 = 6 · 3 = 18. Dan 62 − 48 + 18 = 32."],
-[4,"Bereken: 18 + 4 · (8 − 3)",["38","110","37","58"],"Haakjes: 5. Dan 4 · 5 = 20. Dan 18 + 20 = 38."],
-[4,"Bereken: 35 : 7 − 2 · 2",["1","6","16","3"],"35 : 7 = 5 en 2 · 2 = 4. Dan 5 − 4 = 1."],
-[4,"Bereken: (44 − 8) : 4 − 2",["7","12","34","9"],"Haakjes: 36. Dan 36 : 4 = 9. Dan 9 − 2 = 7."],
-[4,"Bereken: (12 − 2 · 3) : 6",["1","5","0","2"],"In de haakjes eerst 2 · 3 = 6, dus 12 − 6 = 6. Dan 6 : 6 = 1."],
-[4,"Bereken: 8 · (48 : 8 − 6)",["0","48","40","8"],"In de haakjes: 6 − 6 = 0. Dan 8 · 0 = 0."],
-[4,"Bereken: 40 − 3 · 2 · 4",["16","296","34","24"],"3 · 2 · 4 = 24. Dan 40 − 24 = 16."],
-[4,"Waaraan is 8 + 24 : 4 · 2 gelijk?",["20","16","11","64"],"24 : 4 = 6, 6 · 2 = 12. Dan 8 + 12 = 20."],
-[4,"Waaraan is 40 − (10 − 2 · 4) gelijk?",["38","8","22","42"],"In de haakjes: 10 − 8 = 2. Dan 40 − 2 = 38."],
-[4,"Bereken: 120 : 2 + 30 : (3 · 2)",["65","25","45","70"],"120 : 2 = 60 en 30 : 6 = 5. Samen 65."],
-[4,"Bereken: 28 − 5 + 24 : 4 · 2",["35","26","50","29"],"24 : 4 · 2 = 6 · 2 = 12. Dan 28 − 5 + 12 = 35."],
-[4,"Bereken: 160 : 16 − 8 : 4",["8","2","5","32"],"160 : 16 = 10 en 8 : 4 = 2. Dan 10 − 2 = 8."],
-[4,"Bereken: 56 − (18 − 6 : 3)",["40","52","36","44"],"In de haakjes: 6 : 3 = 2, 18 − 2 = 16. Dan 56 − 16 = 40."],
-[4,"Met welke berekening komt 300 : 20 · 5 overeen?",["15 · 5","300 : 100","15 : 5","300 : 25"],"Van links naar rechts: eerst 300 : 20 = 15, dan · 5."],
-[4,"Met welke berekening komt (300 + 20) · 5 overeen?",["320 · 5","300 + 100","320 + 5","300 · 100"],"Eerst de haakjes: 320. Dan · 5."],
-[4,"Met welke berekening komt 500 : (10 − 5) overeen?",["500 : 5","50 − 5","500 − 5","50 : 5"],"Eerst de haakjes: 10 − 5 = 5."],
-[4,"Met welke berekening komt 180 − 80 + 30 overeen?",["100 + 30","180 − 110","260 − 30","180 − 50"],"Van links naar rechts: eerst 180 − 80 = 100."],
-[4,"Is 5 in de bewerking 3 · 5 + 7 een term of een factor?",["een factor","een term","een som","een quotiënt"],"5 wordt vermenigvuldigd met 3: het is een factor van het product 3 · 5."],
-[4,"Is 5 in de bewerking 5 − 2 · 2 een term of een factor?",["een term","een factor","een deler","een product"],"Eerst wordt 2 · 2 berekend. 5 is het aftrektal van het verschil, dus een term."],
-
-// ---------- 3.5 Machten en vierkantswortels ----------
-[5,"Bereken: 7²",["49","14","72","9"],"7² = 7 · 7 = 49."],
-[5,"Bereken: √81",["9","40,5","18","8"],"√81 = 9 want 9² = 81."],
-[5,"Wat is het grondtal in 4⁶?",["4","6","24","4 096"],"Het grondtal is het getal dat herhaald vermenigvuldigd wordt: 4."],
-[5,"Hoe noemen we 6 in 4⁶?",["de exponent","het grondtal","de macht","een factor"],"De exponent zegt hoeveel keer het grondtal als factor voorkomt."],
-[5,"Hoe lees je 4⁶?",["4 tot de zesde (macht)","6 tot de vierde (macht)","4 maal 6","4 kwadraat 6"],"Je zegt '4 tot de zesde macht' of kort '4 tot de zesde'."],
-[5,"Bereken: 2⁵",["32","10","25","16"],"2 · 2 · 2 · 2 · 2 = 32."],
-[5,"Bereken: 3⁴",["81","12","64","27"],"3 · 3 · 3 · 3 = 81."],
-[5,"Bereken: 10⁴",["10 000","40","1 000","100 000"],"10⁴ is een 1 met vier nullen."],
-[5,"Bereken: 0⁵",["0","5","1","50"],"0 · 0 · 0 · 0 · 0 = 0."],
-[5,"Bereken: 1⁸",["1","8","0","18"],"1 maal zichzelf blijft altijd 1."],
-[5,"Bereken: 6³",["216","18","36","1 296"],"6 · 6 = 36, 36 · 6 = 216."],
-[5,"Bereken: 5³",["125","15","25","625"],"5 · 5 · 5 = 125."],
-[5,"Bereken: 13²",["169","26","139","196"],"13 · 13 = 169."],
-[5,"Bereken: √144",["12","72","14","11"],"12² = 144."],
-[5,"Bereken: √196",["14","13","98","16"],"14² = 196."],
-[5,"Bereken: √225",["15","25","112,5","14"],"15² = 225."],
-[5,"Bereken: √1",["1","0","2","0,5"],"1² = 1, dus √1 = 1."],
-[5,"Bereken: 0,1²",["0,01","0,2","0,1","0,02"],"0,1 · 0,1 = 0,01."],
-[5,"Een vierkant heeft een oppervlakte van 49 cm². Hoe lang is een zijde?",["7 cm","24,5 cm","12,25 cm","14 cm"],"De zijde is de vierkantswortel van de oppervlakte: √49 = 7."],
-[5,"Een vierkant heeft een zijde van 9 cm. Wat is de oppervlakte?",["81 cm²","36 cm²","18 cm²","27 cm²"],"Oppervlakte = zijde · zijde = 9 · 9 = 81 cm²."],
-[5,"Schrijf als macht: 2,5 · 2,5 · 2,5 · 2,5",["2,5⁴","4 · 2,5","4^2,5","10"],"Vier gelijke factoren 2,5: dat is 2,5⁴."],
-[5,"Schrijf als macht: 5 · 5 · 5 · 5 · 5",["5⁵","5⁴","5 · 5","5 + 5 + 5 + 5 + 5"],"Vijf gelijke factoren 5: dat is 5⁵."],
-[5,"Het woord 'kwadraat' komt van het Latijnse 'quadratus'. Wat betekent dat?",["vierkant","vier","macht","wortel"],"Quadratus = vierkant. Een kwadraat is de oppervlakte van een vierkant."],
-[5,"Pauline krijgt de eerste maand € 2 zakgeld. Elke volgende maand wordt het bedrag verdubbeld. Hoeveel krijgt ze in de vijfde maand?",["€ 32","€ 10","€ 16","€ 64"],"2, 4, 8, 16, 32. Dat is 2⁵ = 32."],
-[5,"Met welke berekening komt 8 + 2³ overeen?",["8 + 8","10³","8 + 6","10 · 3"],"Eerst de macht: 2³ = 8. Dan 8 + 8."],
-[5,"Met welke berekening komt (8 + 2)³ overeen?",["10³","8 + 8","8 + 6","30"],"Eerst de haakjes: 10. Dan 10³."],
-[5,"Bereken: 10 · 2³",["80","8 000","60","1 000"],"Eerst de macht: 2³ = 8. Dan 10 · 8 = 80."],
-[5,"Bereken: (10 · 2)³",["8 000","80","60","600"],"Eerst de haakjes: 20. Dan 20³ = 20 · 20 · 20 = 8 000."],
-[5,"Bereken: 10³ : 2",["500","125","150","1 000"],"Eerst de macht: 1 000. Dan 1 000 : 2 = 500."],
-[5,"Bereken: (10 − 2)³",["512","2","992","24"],"Eerst de haakjes: 8. Dan 8³ = 512."],
-[5,"Welke bewerkingen bereken je na de haakjes, maar vóór · en : ?",["machten en vierkantswortels","optellingen en aftrekkingen","alles van links naar rechts","enkel vierkantswortels"],"Volgorde: haakjes, dan machten en wortels, dan · en :, dan + en −."],
-[5,"Hoe behandel je een bewerking onder een wortelteken, zoals √(9 − 5)?",["als een bewerking tussen haakjes","je mag het wortelteken weglaten","je trekt eerst de wortel van elk getal","je rekent het als laatste uit"],"Een bewerking onder een wortelteken beschouwen we als een bewerking tussen haakjes."],
-[5,"Bereken: 100 : (3 + 2)² − 4 + √36 · 2",["12","8","16","0"],"100 : 25 − 4 + 6 · 2 = 4 − 4 + 12 = 12."],
-[5,"Bereken: 2² − 1⁵ · 3",["1","9","3","7"],"4 − 1 · 3 = 4 − 3 = 1."],
-[5,"Bereken: 2³ · (5² − 9)",["128","191","32","112"],"Haakjes: 25 − 9 = 16. Dan 8 · 16 = 128."],
-[5,"Bereken: 5³ − √(36 + 64)",["115","55","119","15"],"√100 = 10. Dan 125 − 10 = 115."],
-[5,"Bereken: √9 · (2 + 1)³ + 12²",["225","153","189","117"],"3 · 27 + 144 = 81 + 144 = 225."],
-[5,"Bereken: √(9 + 16)",["5","7","25","12,5"],"Eerst onder het wortelteken: 25. Dan √25 = 5."],
-[5,"Bereken: √9 + √16",["7","5","25","12"],"3 + 4 = 7. Let op: dat is niet hetzelfde als √(9 + 16) = 5."],
-[5,"Bereken: (2 + 3)²",["25","13","10","11"],"Eerst de haakjes: 5. Dan 5² = 25."],
-[5,"Bereken: 2 + 3²",["11","25","13","10"],"Eerst de macht: 9. Dan 2 + 9 = 11."],
-[5,"Bereken: 6 · 3² + 5² − √64",["71","87","79","63"],"6 · 9 + 25 − 8 = 54 + 25 − 8 = 71."],
-[5,"Bereken: (6² : 4 − 3) · √36",["36","18","54","6"],"Haakjes: 36 : 4 − 3 = 9 − 3 = 6. Dan 6 · 6 = 36."],
-[5,"Bereken: 13² − √121 · (2 + 1²)",["136","474","146","158"],"169 − 11 · 3 = 169 − 33 = 136."],
-[5,"Bereken: 8 − √(9 + 16) − 3³ : 9",["0","2","6","3"],"8 − 5 − 27 : 9 = 8 − 5 − 3 = 0."],
-[5,"Waaraan is (√49 − 2)² gelijk?",["25","45","47","9"],"Haakjes: 7 − 2 = 5. Dan 5² = 25."],
-[5,"Waaraan is √(64 + 36) gelijk?",["10","14","100","50"],"Eerst onder het wortelteken: 100. Dan √100 = 10."],
-[5,"Welk symbool hoort op de puntjes?  3 · 2⁴ … (3 · 2)⁴",["<",">","=","≥"],"3 · 16 = 48 en 6⁴ = 1 296. Dus 48 < 1 296."],
-[5,"Welk symbool hoort op de puntjes?  2² · 2⁴ … 4³",["=","<",">","≠"],"4 · 16 = 64 en 4³ = 64. Ze zijn gelijk."],
-[5,"Welk symbool hoort op de puntjes?  4² + 3² … 5²",["=","<",">","≠"],"16 + 9 = 25 en 5² = 25. Ze zijn gelijk."],
-[5,"Welk symbool hoort op de puntjes?  5 · 4² … 4 · 5²",["<",">","=","≥"],"5 · 16 = 80 en 4 · 25 = 100. Dus 80 < 100."]
-];
-
-const PER_SECTION = 4;
-const LETTERS = ["A","B","C","D"];
-const LS_HIST = "h3toets.history";
-const LS_SEEN = "h3toets.seen";
-const LS_LIMIT = "h3toets.limit";
-
-function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
-function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
-
-function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-
-let state = null;
-let tick = null;
-
-function pickQuestions() {
-  let seen = lsGet(LS_SEEN, []);
-  const picked = [];
-  for (const sec of [1,2,3,4,5]) {
-    const ids = BANK.map((q, i) => q[0] === sec ? i : -1).filter(i => i >= 0);
-    let fresh = ids.filter(i => !seen.includes(i));
-    if (fresh.length < PER_SECTION) {
-      // alle vragen van dit onderdeel gezien: opnieuw beginnen
-      seen = seen.filter(i => BANK[i][0] !== sec);
-      fresh = ids;
-    }
-    picked.push(...shuffle(fresh).slice(0, PER_SECTION));
-  }
-  lsSet(LS_SEEN, seen.concat(picked));
-  return picked;
-}
-
-function newTest() {
-  const ids = pickQuestions();
-  state = {
-    ids,
-    orders: ids.map(() => shuffle([0,1,2,3])),
-    answers: ids.map(() => null),
-    submitted: false,
-    start: Date.now(),
-    elapsed: 0,
-    limit: Number(document.getElementById("limit").value) || 0
-  };
-  render();
-  startTimer();
-  window.scrollTo({ top: 0 });
-}
-
-function fmt(sec) { sec = Math.max(0, Math.round(sec)); return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); }
-
-function elapsedNow() { return state.submitted ? state.elapsed : (Date.now() - state.start) / 1000; }
-
-function updateTimer() {
-  const el = document.getElementById("timer");
-  const e = elapsedNow();
-  if (state.limit && !state.submitted) {
-    const left = state.limit * 60 - e;
-    el.textContent = fmt(left);
-    el.title = "Resterende tijd";
-    el.classList.toggle("warn", left <= 60);
-    if (left <= 0) submit(true);
-  } else {
-    el.textContent = fmt(e);
-    el.title = state.submitted ? "Gebruikte tijd" : "Verstreken tijd";
-    el.classList.remove("warn");
-  }
-}
-
-function startTimer() { clearInterval(tick); updateTimer(); tick = setInterval(updateTimer, 500); }
-
-function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
-
-function render() {
-  const test = document.getElementById("test");
-  let html = "";
-  let n = 0;
-  let lastSec = 0;
-  state.ids.forEach((id, qi) => {
-    const [sec, text, opts, expl] = BANK[id];
-    if (sec !== lastSec) {
-      if (lastSec) html += "</section>";
-      html += `<section class="sec"><h2><span class="secnr">3.${sec}</span>${SECTIONS[sec]}</h2>`;
-      lastSec = sec;
-    }
-    n++;
-    const chosen = state.answers[qi];
-    let cls = "q";
-    if (state.submitted) cls += chosen === 0 ? " right" : " wrong";
-    html += `<div class="${cls}" id="q${qi}"><div class="qhead"><span class="qnr">${n}</span><p class="qtext">${esc(text)}</p></div><div class="opts" role="radiogroup" aria-label="Vraag ${n}">`;
-    state.orders[qi].forEach((oi, pos) => {
-      let oc = "opt";
-      if (chosen === oi) oc += " sel";
-      if (state.submitted) {
-        if (oi === 0) oc += " is-correct";
-        else if (chosen === oi) oc += " is-wrong";
-      }
-      html += `<button type="button" class="${oc}" role="radio" aria-checked="${chosen === oi}" data-q="${qi}" data-o="${oi}" ${state.submitted ? "disabled" : ""}><span class="letter">${LETTERS[pos]}</span><span class="val">${esc(opts[oi])}</span></button>`;
-    });
-    html += "</div>";
-    if (state.submitted) {
-      const lead = chosen === null ? "Niet beantwoord." : chosen === 0 ? "Juist!" : "Fout.";
-      html += `<p class="expl"><b>${lead}</b>${esc(expl)}</p>`;
-    }
-    html += "</div>";
-  });
-  html += "</section>";
-  test.innerHTML = html;
-  renderResult();
-  updateProgress();
-  renderHistory();
-}
-
-function updateProgress() {
-  const done = state.answers.filter(a => a !== null).length;
-  const total = state.ids.length;
-  document.getElementById("progText").textContent = state.submitted
-    ? `Ingediend · ${score()} van ${total} juist`
-    : `${done} van ${total} beantwoord`;
-  document.getElementById("progBar").style.width = (state.submitted ? score() : done) / total * 100 + "%";
-  const btn = document.getElementById("submitBtn");
-  btn.textContent = state.submitted ? "Nieuwe vragen" : "Indienen";
-  document.getElementById("confirmMsg").hidden = true;
-  pendingConfirm = false;
-}
-
-function score() { return state.answers.filter(a => a === 0).length; }
-
-function verdict(s) {
-  if (s >= 18) return "Uitstekend! Je beheerst dit hoofdstuk.";
-  if (s >= 14) return "Goed gedaan. Bekijk de fouten nog even.";
-  if (s >= 10) return "Voldoende. Herhaal de onderdelen met de meeste fouten.";
-  return "Nog niet voldoende. Lees de theorie opnieuw en probeer nog een toets.";
-}
-
-function renderResult() {
-  const box = document.getElementById("result");
-  if (!state.submitted) { box.hidden = true; box.innerHTML = ""; return; }
-  const s = score();
-  let secs = "";
-  for (const sec of [1,2,3,4,5]) {
-    let ok = 0, tot = 0;
-    state.ids.forEach((id, qi) => { if (BANK[id][0] === sec) { tot++; if (state.answers[qi] === 0) ok++; } });
-    secs += `<div><b>${ok}/${tot}</b>3.${sec} ${SECTIONS[sec]}</div>`;
-  }
-  box.innerHTML = `<div class="big">${s}<small>/20</small></div>
-    <div><p><strong>${verdict(s)}</strong></p><p class="sub">Tijd: ${fmt(state.elapsed)}${state.timedOut ? " · de tijd was om" : ""}. De juiste antwoorden staan in het groen, met uitleg.</p></div>
-    <div class="bysec">${secs}</div>`;
-  box.hidden = false;
-}
-
-let pendingConfirm = false;
-function submit(force) {
-  if (state.submitted) return;
-  const open = state.answers.filter(a => a === null).length;
-  if (open && !force && !pendingConfirm) {
-    pendingConfirm = true;
-    const m = document.getElementById("confirmMsg");
-    m.textContent = `Nog ${open} open. Klik opnieuw om toch in te dienen.`;
-    m.hidden = false;
-    document.getElementById("submitBtn").textContent = "Toch indienen";
-    return;
-  }
-  state.elapsed = (Date.now() - state.start) / 1000;
-  if (state.limit) state.elapsed = Math.min(state.elapsed, state.limit * 60);
-  state.timedOut = !!force;
-  state.submitted = true;
-  const hist = lsGet(LS_HIST, []);
-  hist.unshift({ d: Date.now(), s: score(), t: Math.round(state.elapsed) });
-  lsSet(LS_HIST, hist.slice(0, 30));
-  render();
-  updateTimer();
-  window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-}
-
-function renderHistory() {
-  const el = document.getElementById("hist");
-  const hist = lsGet(LS_HIST, []);
-  if (!hist.length) {
-    el.innerHTML = `<h3>Jouw scores</h3><p class="empty">Nog geen toetsen ingediend. Na het indienen verschijnt je score hier, zodat je je vooruitgang ziet.</p>`;
-    return;
-  }
-  const avg = hist.reduce((a, h) => a + h.s, 0) / hist.length;
-  const rows = hist.slice(0, 10).map(h => {
-    const d = new Date(h.d);
-    const ds = d.toLocaleDateString("nl-BE", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit" });
-    return `<li><span class="muted">${ds}</span><span class="hb"><i style="width:${h.s / 20 * 100}%"></i></span><b>${h.s}/20</b><span class="t muted">${fmt(h.t)}</span></li>`;
-  }).join("");
-  el.innerHTML = `<h3>Jouw scores <span class="muted" style="font-weight:400;font-size:14px">· gemiddeld ${avg.toFixed(1).replace(".", ",")}/20 over ${hist.length} toets${hist.length > 1 ? "en" : ""}</span></h3><ol>${rows}</ol>
-    <p style="margin:10px 0 0"><button type="button" class="linkbtn" id="clearHist">Scores wissen</button></p>`;
-}
-
-document.getElementById("test").addEventListener("click", e => {
-  const b = e.target.closest(".opt");
-  if (!b || state.submitted) return;
-  const qi = Number(b.dataset.q), oi = Number(b.dataset.o);
-  state.answers[qi] = oi;
-  b.parentElement.querySelectorAll(".opt").forEach(x => {
-    const on = Number(x.dataset.o) === oi;
-    x.classList.toggle("sel", on);
-    x.setAttribute("aria-checked", on);
-  });
-  updateProgress();
-});
-
-document.getElementById("submitBtn").addEventListener("click", () => {
-  if (state.submitted) newTest(); else submit(false);
-});
-document.getElementById("newBtn").addEventListener("click", newTest);
-document.getElementById("limit").addEventListener("change", e => {
-  lsSet(LS_LIMIT, e.target.value);
-  if (!state.submitted) { state.limit = Number(e.target.value) || 0; updateTimer(); }
-});
-document.getElementById("hist").addEventListener("click", e => {
-  if (e.target.id !== "clearHist") return;
-  if (e.target.dataset.armed) { lsSet(LS_HIST, []); renderHistory(); }
-  else { e.target.dataset.armed = "1"; e.target.textContent = "Klik nogmaals om alle scores te wissen"; }
-});
-
-function boot(data) {
-  const lim = lsGet(LS_LIMIT, "0");
-  document.getElementById("limit").value = lim;
-  if (data && data.state) {
-    state = data.state;
-    // tijd verder laten lopen vanaf de bewaarde verstreken tijd
-    if (!state.submitted) state.start = Date.now() - (data.elapsedAtSnapshot || 0) * 1000;
-    render();
-    startTimer();
-  } else {
-    newTest();
-  }
-}
-window.claude?.hot?.snapshot?.(() => ({ state, elapsedAtSnapshot: state ? elapsedNow() : 0 }));
-window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
-</script>
-
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

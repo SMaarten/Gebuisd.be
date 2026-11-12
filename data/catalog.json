@@ -1,0 +1,13 @@
+{
+  "hoofdstukken": [
+    {
+      "id": "wiskunde-1-h3",
+      "vak": "Wiskunde",
+      "graad": "1ste jaar",
+      "nr": "3",
+      "titel": "Bewerkingen met positieve getallen",
+      "vragen": 203,
+      "bestand": "data/wiskunde-1-h3.json"
+    }
+  ]
+}
