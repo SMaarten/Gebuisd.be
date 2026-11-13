@@ -61,6 +61,14 @@ a { color: var(--accent); }
 .crumbs a { color: var(--muted); }
 .topbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; min-height: 22px; }
 .topbar .crumbs { flex: 1 1 auto; }
+.homebtn { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; font-weight: 700; color: var(--ink); text-decoration: none; border: 1px solid var(--line); background: var(--sheet); border-radius: 999px; padding: 3px 12px 3px 9px; flex: none; }
+.homebtn:hover, .account .acc:hover { border-color: var(--accent); }
+.account .acc.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); }
+.tabs button { background: none; border: none; border-bottom: 3px solid transparent; padding: 8px 12px; font-weight: 700; color: var(--muted); margin-bottom: -1px; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; }
+.or::before, .or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
 .account { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; font-size: 14px; flex: 0 1 auto; min-width: 0; margin-left: auto; }
 .account .acc { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account .acc { color: var(--ink); font-weight: 700; text-decoration: none; border: 1px solid var(--line); background: var(--sheet); border-radius: 999px; padding: 3px 12px; }

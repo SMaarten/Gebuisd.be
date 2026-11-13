@@ -401,7 +401,7 @@ async function removeChapter(id, btn) {
 
 /* ---------- Gebruikers ---------- */
 
-const NAMEN = { google: "Google", microsoft: "Microsoft", smartschool: "Smartschool" };
+const NAMEN = { lokaal: "eigen account", google: "Google", microsoft: "Microsoft", smartschool: "Smartschool" };
 
 async function renderUsers() {
   const box = $("users");
@@ -412,10 +412,11 @@ async function renderUsers() {
   box.innerHTML = `<h2>Gebruikers <span class="muted" style="font-weight:400;font-size:15px">· ${list.length} account${list.length === 1 ? "" : "s"}, ${lk} leerkracht${lk === 1 ? "" : "en"}</span></h2>
     <p class="hint">Iedereen die inlogt, is eerst leerling. Geef leerkrachten hier de rol leerkracht; dan kunnen ze klassen maken en de scores van hun klassen zien.</p>
     ${list.length > 8 ? `<input id="uZoek" placeholder="Zoeken op naam of e-mail" style="max-width:320px">` : ""}
-    ${list.length ? `<ul class="admlist" id="uList">${list.map(u => `<li data-zoek="${esc((u.naam + " " + u.email).toLowerCase())}">
-      <span><b>${esc(u.naam || "(geen naam)")}</b> <span class="muted">· ${esc(u.email || NAMEN[u.provider] || u.provider)}${u.email ? " · " + esc(NAMEN[u.provider] || u.provider) : ""} · ${u.toetsen} toets${u.toetsen === 1 ? "" : "en"} · laatst ${datum(u.laatst)}</span></span>
+    ${list.length ? `<ul class="admlist" id="uList">${list.map(u => `<li data-zoek="${esc((u.naam + " " + u.email + " " + (u.gebruikersnaam || "")).toLowerCase())}">
+      <span><b>${esc(u.naam || "(geen naam)")}</b> <span class="muted">· ${u.gebruikersnaam ? "@" + esc(u.gebruikersnaam) + " · " : ""}${esc(u.email || NAMEN[u.provider] || u.provider)}${u.email ? " · " + esc(NAMEN[u.provider] || u.provider) : ""} · ${u.toetsen} toets${u.toetsen === 1 ? "" : "en"} · laatst ${datum(u.laatst)}</span></span>
       <span class="row">
         <select data-rol="${esc(u.id)}" aria-label="Rol van ${esc(u.naam)}"><option value="leerling" ${u.rol === "leerling" ? "selected" : ""}>leerling</option><option value="leerkracht" ${u.rol === "leerkracht" ? "selected" : ""}>leerkracht</option></select>
+        ${u.provider === "lokaal" ? `<button class="btn small" type="button" data-pw="${esc(u.id)}" data-naam="${esc(u.gebruikersnaam)}">Nieuw wachtwoord</button>` : ""}
         <button class="btn small danger" type="button" data-delu="${esc(u.id)}">Verwijderen</button>
       </span></li>`).join("")}</ul>` : `<p class="hint">Nog niemand ingelogd.</p>`}
     <p class="status" id="uStatus" role="status"></p>`;
@@ -428,6 +429,14 @@ async function renderUsers() {
     catch (err) { handle(err, "uStatus"); }
   };
   box.onclick = async e => {
+    const pid = e.target.dataset.pw;
+    if (pid) {
+      const pw = prompt(`Nieuw tijdelijk wachtwoord voor @${e.target.dataset.naam} (minstens 8 tekens). Geef het door aan de leerling; die kan het daarna zelf wijzigen bij Mijn account.`);
+      if (!pw) return;
+      try { await api(`/admin/gebruikers/${pid}/wachtwoord`, { method: "PUT", admin: true, body: { wachtwoord: pw } }); status("uStatus", `Nieuw wachtwoord ingesteld voor @${esc(e.target.dataset.naam)}.`, "ok"); }
+      catch (err) { handle(err, "uStatus"); }
+      return;
+    }
     const id = e.target.dataset.delu;
     if (!id || !confirm("Dit account met alle resultaten en klassen definitief verwijderen?")) return;
     try { await api(`/admin/gebruikers/${id}`, { method: "DELETE", admin: true }); await renderUsers(); status("uStatus", "Verwijderd.", "ok"); }

@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS gebruikers (
   id          TEXT PRIMARY KEY,
-  provider    TEXT NOT NULL,              -- google | microsoft | smartschool
+  provider    TEXT NOT NULL,              -- lokaal | google | microsoft | smartschool
   sub         TEXT NOT NULL,              -- vaste id bij de provider
   naam        TEXT NOT NULL DEFAULT '',
   email       TEXT NOT NULL DEFAULT '',
@@ -48,3 +48,11 @@ CREATE TABLE IF NOT EXISTS leden (
   PRIMARY KEY (klas, gebruiker)
 );
 CREATE INDEX IF NOT EXISTS leden_gebruiker ON leden (gebruiker);
+
+-- Eigen accounts (gebruikersnaam + wachtwoord). De gebruikersnaam staat in gebruikers.sub
+-- met provider 'lokaal'; hier staat enkel de hash van het wachtwoord (PBKDF2-SHA256).
+CREATE TABLE IF NOT EXISTS wachtwoorden (
+  gebruiker   TEXT PRIMARY KEY REFERENCES gebruikers(id) ON DELETE CASCADE,
+  hash        TEXT NOT NULL,
+  gewijzigd   INTEGER NOT NULL
+);

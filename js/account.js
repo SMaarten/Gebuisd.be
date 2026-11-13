@@ -25,11 +25,10 @@ export async function renderAccountBar() {
   const el = document.getElementById("account");
   const u = user();
   if (u) {
-    el.innerHTML = `<a href="#/mijn" class="acc">${esc(u.naam || "Mijn account")}</a>${u.rol === "leerkracht" ? ` <a href="#/klassen" class="acc">Mijn klassen</a>` : ""}`;
+    el.innerHTML = `${u.rol === "leerkracht" ? `<a href="#/klassen" class="acc">Mijn klassen</a>` : ""}<a href="#/mijn" class="acc" title="Mijn account">${esc(u.naam || "Mijn account")}</a>`;
     return;
   }
-  const s = await serverStatus();
-  el.innerHTML = s.logins?.length ? `<a href="#/login" class="acc">Inloggen</a>` : "";
+  el.innerHTML = `<a href="#/login" class="acc primary">Inloggen</a>`;
 }
 
 /* ---------- Inloggen ---------- */
@@ -38,6 +37,8 @@ export async function renderLogin(root, params) {
   if (user()) { location.hash = "#/mijn"; return; }
   const s = await serverStatus();
   const fout = params.get("fout");
+  const tab = params.get("nieuw") ? "nieuw" : "in";
+  if (!lsGet(LS_NA_LOGIN, "")) lsSet(LS_NA_LOGIN, "#/mijn");
   root.innerHTML = `
     <header class="top">
       <span class="eyebrow">Account</span>
@@ -45,14 +46,63 @@ export async function renderLogin(root, params) {
       <p class="sub">Inloggen is niet nodig om toetsen te maken. Met een account zie je je historiek op elk toestel, kan je lid worden van een klas en een hoofdstuk voorstellen.</p>
     </header>
     ${fout ? `<p class="panel msg err">${esc(fout)}</p>` : ""}
+    ${!s.ok ? `<p class="panel msg err">Inloggen is nu even niet mogelijk. Probeer het later opnieuw.</p>` : `
     <section class="panel form login">
-      ${s.logins?.length ? s.logins.map(p => `<a class="btn provider" href="${esc(startUrl(p))}" data-p="${p}">Inloggen met ${NAMEN[p]}</a>`).join("") : `<p class="hint">Inloggen is nog niet beschikbaar.</p>`}
-      <p class="hint">Door in te loggen ga je akkoord met de <a href="#/privacy">privacyverklaring</a>.</p>
-    </section>`;
-  root.querySelectorAll("[data-p]").forEach(a => a.addEventListener("click", () => {
-    const na = lsGet(LS_NA_LOGIN, "");
-    if (!na) lsSet(LS_NA_LOGIN, "#/mijn");
-  }));
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" id="tabIn" aria-selected="${tab === "in"}">Inloggen</button>
+        <button type="button" role="tab" id="tabNieuw" aria-selected="${tab === "nieuw"}">Account maken</button>
+      </div>
+      <form class="form" id="inForm" ${tab === "in" ? "" : "hidden"}>
+        <label class="field"><span>Gebruikersnaam</span><input id="iNaam" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+        <label class="field"><span>Wachtwoord</span><input id="iPw" type="password" autocomplete="current-password" required></label>
+        <div class="row"><button class="btn primary" type="submit">Inloggen</button></div>
+        <p class="hint">Wachtwoord vergeten? Vraag de beheerder om een nieuw tijdelijk wachtwoord.</p>
+      </form>
+      <form class="form" id="nieuwForm" ${tab === "nieuw" ? "" : "hidden"}>
+        <label class="field"><span>Kies een gebruikersnaam</span><input id="nNaam" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="30" required>
+          <small>3 tot 30 tekens: letters, cijfers, punt, _ of -. Gebruik niet je volledige naam als je dat niet wil.</small></label>
+        <label class="field"><span>Je naam <small>(mag leeg)</small></span><input id="nVol" autocomplete="name" maxlength="100">
+          <small>Zo zie je leerkracht wie je bent als je lid wordt van een klas.</small></label>
+        <label class="field"><span>Kies een wachtwoord</span><input id="nPw" type="password" autocomplete="new-password" minlength="8" required><small>Minstens 8 tekens.</small></label>
+        <label class="field"><span>Herhaal het wachtwoord</span><input id="nPw2" type="password" autocomplete="new-password" minlength="8" required></label>
+        <div class="row"><button class="btn primary" type="submit">Account maken</button></div>
+        <p class="hint">Door een account te maken, ga je akkoord met de <a href="#/privacy">privacyverklaring</a>. Ben je jonger dan 13, vraag dan eerst toestemming aan je ouders.</p>
+      </form>
+      <p class="status" id="lStatus" role="status" aria-live="polite"></p>
+      ${s.logins?.length ? `<p class="or">of</p>${s.logins.map(p => `<a class="btn provider" href="${esc(startUrl(p))}">Inloggen met ${NAMEN[p]}</a>`).join("")}` : ""}
+    </section>`}`;
+  if (!s.ok) return;
+  const $ = id => root.querySelector("#" + id);
+  const show = t => {
+    $("tabIn").setAttribute("aria-selected", t === "in");
+    $("tabNieuw").setAttribute("aria-selected", t === "nieuw");
+    $("inForm").hidden = t !== "in";
+    $("nieuwForm").hidden = t !== "nieuw";
+    $("lStatus").textContent = "";
+    (t === "in" ? $("iNaam") : $("nNaam")).focus();
+  };
+  $("tabIn").onclick = () => show("in");
+  $("tabNieuw").onclick = () => show("nieuw");
+  const busy = (form, on) => form.querySelector("button[type=submit]").disabled = on;
+  const err = m => { $("lStatus").textContent = m; $("lStatus").className = "status err"; };
+  $("inForm").onsubmit = async e => {
+    e.preventDefault();
+    busy(e.target, true);
+    try {
+      const sess = await api("/aanmelden", { method: "POST", body: { gebruikersnaam: $("iNaam").value, wachtwoord: $("iPw").value } });
+      await finishLogin(root, sess.token, sess.verloopt);
+    } catch (x) { err(x.message); busy(e.target, false); $("iPw").select(); }
+  };
+  $("nieuwForm").onsubmit = async e => {
+    e.preventDefault();
+    if ($("nPw").value !== $("nPw2").value) return err("De twee wachtwoorden zijn niet gelijk.");
+    busy(e.target, true);
+    try {
+      const sess = await api("/registreer", { method: "POST", body: { gebruikersnaam: $("nNaam").value, naam: $("nVol").value, wachtwoord: $("nPw").value } });
+      await finishLogin(root, sess.token, sess.verloopt);
+    } catch (x) { err(x.message); busy(e.target, false); }
+  };
+  (tab === "in" ? $("iNaam") : $("nNaam")).focus();
 }
 
 function startUrl(p) {
@@ -69,6 +119,11 @@ export async function handleCallback(root, params) {
   const token = params.get("t"), exp = Number(params.get("exp"));
   history.replaceState(null, "", location.pathname + "#/");   // token niet in de adresbalk laten staan
   if (!token) { location.hash = "#/login"; return; }
+  await finishLogin(root, token, exp);
+}
+
+// Na inloggen (wachtwoord of externe login): profiel ophalen, lokale scores meenemen, terug naar waar je was.
+async function finishLogin(root, token, exp) {
   root.innerHTML = `<p class="panel msg"><span class="spin"></span>Inloggen…</p>`;
   setUser({ token, verloopt: exp || Date.now() + 86400000 });
   try {
@@ -80,9 +135,11 @@ export async function handleCallback(root, params) {
     location.hash = "#/login?fout=" + encodeURIComponent(e.message);
     return;
   }
+  renderAccountBar();
   const na = lsGet(LS_NA_LOGIN, "") || "#/mijn";
   lsDel(LS_NA_LOGIN);
-  location.hash = na;
+  if (location.hash === na) window.dispatchEvent(new HashChangeEvent("hashchange"));
+  else location.hash = na;
 }
 
 // Scores die al in deze browser stonden, mee naar het account (dubbels worden genegeerd).
@@ -115,7 +172,7 @@ export async function renderMine(root) {
 
   root.innerHTML = `
     <header class="top">
-      <span class="eyebrow">Mijn account · ${esc(NAMEN[me.provider] || me.provider)}${me.rol === "leerkracht" ? " · leerkracht" : ""}</span>
+      <span class="eyebrow">Mijn account · ${me.provider === "lokaal" ? "gebruikersnaam " + esc(me.gebruikersnaam) : esc(NAMEN[me.provider] || me.provider)}${me.rol === "leerkracht" ? " · leerkracht" : ""}</span>
       <h1>${esc(me.naam || "Mijn resultaten")}</h1>
       <p class="sub">${hist.length ? `${hist.length} toets${hist.length > 1 ? "en" : ""} gemaakt in ${per.size} hoofdstuk${per.size > 1 ? "ken" : ""}.` : "Nog geen toetsen gemaakt met dit account."}</p>
     </header>
@@ -138,6 +195,14 @@ export async function renderMine(root) {
     </section>
     <section class="panel form">
       <h2>Account</h2>
+      ${me.provider === "lokaal" ? `<form class="form" id="pwForm">
+        <input type="text" autocomplete="username" value="${esc(me.gebruikersnaam)}" hidden>
+        <div class="fields">
+          <label class="field"><span>Huidig wachtwoord</span><input id="pOud" type="password" autocomplete="current-password" required></label>
+          <label class="field"><span>Nieuw wachtwoord</span><input id="pNieuw" type="password" autocomplete="new-password" minlength="8" required></label>
+        </div>
+        <div class="row"><button class="btn" type="submit">Wachtwoord wijzigen</button></div>
+      </form>` : ""}
       <div class="row">
         <button class="btn" type="button" id="logoutBtn">Uitloggen</button>
         <button class="btn danger" type="button" id="delBtn">Mijn account en gegevens verwijderen</button>
@@ -146,6 +211,15 @@ export async function renderMine(root) {
       <p class="status" id="aStatus" role="status"></p>
     </section>`;
 
+  const pw = root.querySelector("#pwForm");
+  if (pw) pw.onsubmit = async e => {
+    e.preventDefault();
+    try {
+      await api("/ik/wachtwoord", { method: "PUT", auth: true, body: { oud: root.querySelector("#pOud").value, nieuw: root.querySelector("#pNieuw").value } });
+      pw.reset();
+      status(root, "aStatus", "Je wachtwoord is gewijzigd.", "ok");
+    } catch (err) { status(root, "aStatus", esc(err.message), "err"); }
+  };
   root.querySelector("#joinForm").onsubmit = async e => {
     e.preventDefault();
     const code = root.querySelector("#code").value.trim();
@@ -260,14 +334,15 @@ export function renderPrivacy(root) {
       <h3>Zonder account</h3>
       <p>Je kan alle toetsen maken zonder in te loggen. Je scores en de vragen die je al kreeg, worden dan enkel in je eigen browser bewaard. Wij ontvangen niets.</p>
       <h3>Met een account</h3>
-      <p>Log je in met Google, Microsoft of Smartschool, dan bewaren we:</p>
+      <p>Maak je een account met een gebruikersnaam en wachtwoord, of log je in met Google, Microsoft of Smartschool, dan bewaren we:</p>
       <ul>
-        <li>je naam, en je e-mailadres als de login dat doorgeeft (Smartschool geeft geen e-mailadres door);</li>
-        <li>een vaste code van je account bij die dienst, zodat we je herkennen;</li>
+        <li>je gebruikersnaam en de naam die je opgaf; bij een externe login je naam, en je e-mailadres als de login dat doorgeeft;</li>
+        <li>bij een eigen account: je wachtwoord, maar enkel versleuteld (als hash). Niemand, ook de beheerder niet, kan het lezen;</li>
+        <li>bij een externe login: een vaste code van je account bij die dienst, zodat we je herkennen;</li>
         <li>de resultaten van je toetsen: hoofdstuk, datum, score en duur, en welke vragen je al kreeg;</li>
         <li>de klassen waarvan je lid bent.</li>
       </ul>
-      <p>We krijgen nooit je wachtwoord. We gebruiken deze gegevens enkel om je historiek te tonen en, als je lid wordt van een klas, om je scores aan de leerkracht van die klas te tonen. We delen ze met niemand anders en gebruiken ze niet voor reclame.</p>
+      <p>Bij een externe login krijgen we nooit je wachtwoord. We gebruiken deze gegevens enkel om je historiek te tonen en, als je lid wordt van een klas, om je scores aan de leerkracht van die klas te tonen. We delen ze met niemand anders en gebruiken ze niet voor reclame.</p>
       <h3>Een hoofdstuk voorstellen</h3>
       <p>Stuur je cursusmateriaal in, dan bewaren we de bestanden, je opmerking en je naam tot de beheerder het voorstel verwijdert. De bestanden worden door een externe dienst verwerkt om de vragen te maken. Stuur alleen leerstof in, geen persoonlijke gegevens.</p>
       <h3>Waar staan de gegevens?</h3>

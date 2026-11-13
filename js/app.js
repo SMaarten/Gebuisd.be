@@ -69,6 +69,7 @@ function message(text, isErr) {
 }
 
 function crumbs(items) {
+  items = items.filter(([, href]) => href !== "#/");   // "Home" staat al als knop bovenaan
   $("crumbs").innerHTML = items.map(([label, href]) => href ? `<a href="${href}">${esc(label)}</a>` : `<span>${esc(label)}</span>`).join("<span aria-hidden=\"true\">›</span>");
 }
 

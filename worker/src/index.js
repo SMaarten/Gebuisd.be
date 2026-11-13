@@ -19,6 +19,7 @@ import { validateChapter, serializeChapter, catalogEntry, sortCatalog } from "..
 import { Fout, json, ip, rateLimit, getConfig, enc, mask, clean, newId, allowedOrigins, hmacKey, signToken, verifyToken, bearer } from "./common.js";
 import * as auth from "./auth.js";
 import * as users from "./users.js";
+import * as lokaal from "./lokaal.js";
 
 const MB = 1024 * 1024;
 const MAX_FILE = 25 * MB;
@@ -398,8 +399,10 @@ async function handle(req, env, ctx) {
   // ---- iedereen ----
   if (m === "GET" && p === "/status") {
     const c = await getConfig(env);
-    return json({ ok: true, voorstellen: !!c.anthropicKey, logins: auth.enabledProviders(c) });
+    return json({ ok: true, voorstellen: !!c.anthropicKey, logins: auth.enabledProviders(c), eigenAccount: true });
   }
+  if (m === "POST" && p === "/registreer") return json(await lokaal.register(req, env), 201);
+  if (m === "POST" && p === "/aanmelden") return json(await lokaal.login(req, env));
   if (m === "POST" && p === "/login") return adminLogin(req, env);
   if ((r = p.match(/^\/auth\/(\w+)\/start$/)) && m === "GET") return auth.start(req, env, r[1]);
   if ((r = p.match(/^\/auth\/(\w+)\/callback$/)) && m === "GET") return auth.callback(req, env, r[1]);
@@ -409,6 +412,7 @@ async function handle(req, env, ctx) {
     const u = await auth.currentUser(req, env);
     if (m === "GET" && p === "/ik") return json(await users.me(env, u));
     if (m === "DELETE" && p === "/ik") return json(await users.deleteMe(env, u));
+    if (m === "PUT" && p === "/ik/wachtwoord") return json(await lokaal.changePassword(req, env, u));
     if (m === "GET" && p === "/historiek") return json(await users.history(env, u, url.searchParams.get("hoofdstuk")));
     if (m === "POST" && p === "/historiek") return json(await users.addResult(env, u, await req.json().catch(() => null)), 201);
     if (m === "POST" && p === "/historiek/import") return json(await users.importResults(env, u, await req.json().catch(() => null)));
@@ -441,6 +445,7 @@ async function handle(req, env, ctx) {
   if (m === "GET" && ap === "/gebruikers") return json(await users.listUsers(env));
   if ((r = ap.match(/^\/gebruikers\/([\w-]+)$/)) && m === "PUT") return json(await users.setRole(env, r[1], await req.json().catch(() => null)));
   if ((r = ap.match(/^\/gebruikers\/([\w-]+)$/)) && m === "DELETE") return json(await users.deleteUser(env, r[1]));
+  if ((r = ap.match(/^\/gebruikers\/([\w-]+)\/wachtwoord$/)) && m === "PUT") return json(await lokaal.adminReset(req, env, r[1]));
   throw new Fout(404, "Niet gevonden.");
 }
 

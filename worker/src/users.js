@@ -22,7 +22,8 @@ export async function me(env, u) {
   const kl = await env.DB.prepare(
     "SELECT k.id, k.naam, g.naam AS leerkracht FROM leden l JOIN klassen k ON k.id = l.klas JOIN gebruikers g ON g.id = k.leerkracht WHERE l.gebruiker = ? ORDER BY k.naam"
   ).bind(u.id).all();
-  return { naam: u.naam, email: u.email, provider: u.provider, rol: u.rol, klassen: kl.results };
+  const sub = u.provider === "lokaal" ? (await env.DB.prepare("SELECT sub FROM gebruikers WHERE id = ?").bind(u.id).first())?.sub : "";
+  return { naam: u.naam, email: u.email, provider: u.provider, gebruikersnaam: sub || "", rol: u.rol, klassen: kl.results };
 }
 
 export async function deleteMe(env, u) {
@@ -32,6 +33,7 @@ export async function deleteMe(env, u) {
     env.DB.prepare("DELETE FROM klassen WHERE leerkracht = ?").bind(u.id),
     env.DB.prepare("DELETE FROM resultaten WHERE gebruiker = ?").bind(u.id),
     env.DB.prepare("DELETE FROM gezien WHERE gebruiker = ?").bind(u.id),
+    env.DB.prepare("DELETE FROM wachtwoorden WHERE gebruiker = ?").bind(u.id),
     env.DB.prepare("DELETE FROM gebruikers WHERE id = ?").bind(u.id)
   ]);
   return { ok: true };
@@ -169,7 +171,7 @@ export async function classOverview(env, u, id) {
 
 export async function listUsers(env) {
   const r = await env.DB.prepare(
-    `SELECT g.id, g.naam, g.email, g.provider, g.rol, g.aangemaakt, g.laatst,
+    `SELECT g.id, g.naam, g.email, g.provider, CASE WHEN g.provider = 'lokaal' THEN g.sub ELSE '' END AS gebruikersnaam, g.rol, g.aangemaakt, g.laatst,
             (SELECT COUNT(*) FROM resultaten r WHERE r.gebruiker = g.id) AS toetsen
      FROM gebruikers g ORDER BY g.rol DESC, g.naam LIMIT 2000`
   ).all();

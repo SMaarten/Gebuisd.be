@@ -1,6 +1,6 @@
 # Gebuisd.be API (Cloudflare Worker)
 
-Kleine server voor de website. Hij bewaart de Claude API-sleutel, het GitHub-token en de login-gegevens, regelt het inloggen van leerlingen (Google, Microsoft, Smartschool), bewaart hun resultaten en klassen, ontvangt voorstellen en doet voor de beheerder de aanroepen naar Claude en GitHub. Een gratis Cloudflare-account volstaat.
+Kleine server voor de website. Hij bewaart de Claude API-sleutel, het GitHub-token en de login-gegevens, regelt het inloggen van leerlingen (eigen gebruikersnaam en wachtwoord; later ook Google, Microsoft, Smartschool), bewaart hun resultaten en klassen, ontvangt voorstellen en doet voor de beheerder de aanroepen naar Claude en GitHub. Een gratis Cloudflare-account volstaat.
 
 ## Eenmalig installeren
 
@@ -20,6 +20,8 @@ Zet het KV-id in `wrangler.toml` op de plaats van `VERVANG_DOOR_KV_ID` en het da
 npx wrangler d1 execute gebuisd --remote --file schema.sql
 ```
 
+Heb je de tabellen al eerder aangemaakt, voer `schema.sql` dan opnieuw uit na een update: bestaande tabellen blijven ongemoeid, nieuwe (zoals `wachtwoorden`) worden toegevoegd.
+
 Kies dan een lang, sterk admin-wachtwoord en zet de server online:
 
 ```bash
@@ -31,9 +33,9 @@ npx wrangler deploy
 
 Daarna op de website: **Beheer** → inloggen → **Instellingen** → Claude API-sleutel en GitHub-token invullen → **Verbinding testen**.
 
-## Logins voor leerlingen
+## Logins via Google, Microsoft of Smartschool
 
-Per dienst registreer je de website één keer. Je krijgt een *client ID* en een *client secret*, die je invult onder **Beheer → Instellingen → Logins**. Als *redirect URI* geef je exact het adres op dat daar bij de dienst staat, bv. `https://gebuisd-api.<naam>.workers.dev/auth/google/callback`.
+Inloggen met een zelfgekozen gebruikersnaam en wachtwoord werkt meteen, zonder extra instellingen. Wil je later ook Google, Microsoft of Smartschool aanbieden: per dienst registreer je de website één keer. Je krijgt een *client ID* en een *client secret*, die je invult onder **Beheer → Instellingen → Logins**. Als *redirect URI* geef je exact het adres op dat daar bij de dienst staat, bv. `https://gebuisd-api.<naam>.workers.dev/auth/google/callback`.
 
 - **Google**: [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → project maken → *OAuth-toestemmingsscherm* instellen (extern, scopes `openid`, `email`, `profile`) → *OAuth-client-ID* → type *Webtoepassing* → redirect URI toevoegen.
 - **Microsoft**: [Microsoft Entra](https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade) → *Nieuwe registratie* → *Accounts in elke organisatiemap en persoonlijke Microsoft-accounts* → platform *Web* met de redirect URI → *Certificaten en geheimen* → nieuw clientgeheim. In veel schoolomgevingen mogen leerlingen zelf geen toestemming geven aan een externe app; dan moet de ICT-beheerder van de school de app eenmalig goedkeuren (*admin consent*).
@@ -52,7 +54,7 @@ Iedereen die inlogt, is eerst *leerling*. Leerkrachten geef je de rol *leerkrach
 | Waar | Wat |
 |---|---|
 | Cloudflare KV | instellingen (sleutels, repo, branch, logins), voorstellen, lopende logins, tellers tegen misbruik |
-| Cloudflare D1 | gebruikers, resultaten, al gekregen vragen, klassen en leden (`schema.sql`) |
+| Cloudflare D1 | gebruikers, wachtwoord-hashes, resultaten, al gekregen vragen, klassen en leden (`schema.sql`) |
 | Claude Files API | de ingestuurde cursusbestanden, zonder vervaldatum; verwijderd als de beheerder het voorstel verwijdert |
 | GitHub-repo | de online gezette hoofdstukken (`data/`) |
 

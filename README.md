@@ -1,6 +1,6 @@
 # Gebuisd.be – Oefentoetsen
 
-Oefentoetsen per vak en hoofdstuk voor het secundair onderwijs. Iedereen kan zonder login toetsen maken. Wie inlogt (Google, Microsoft of Smartschool), ziet zijn historiek op elk toestel, kan lid worden van een klas en een hoofdstuk voorstellen. Leerkrachten zien de scores van hun klassen. De beheerder keurt voorstellen goed en zet ze online.
+Oefentoetsen per vak en hoofdstuk voor het secundair onderwijs. Iedereen kan zonder login toetsen maken. Wie inlogt (met een zelfgekozen gebruikersnaam en wachtwoord; later ook Google, Microsoft of Smartschool), ziet zijn historiek op elk toestel, kan lid worden van een klas en een hoofdstuk voorstellen. Leerkrachten zien de scores van hun klassen. De beheerder keurt voorstellen goed en zet ze online.
 
 ## Hoe het werkt
 
@@ -10,10 +10,16 @@ Oefentoetsen per vak en hoofdstuk voor het secundair onderwijs. Iedereen kan zon
 - Na het indienen: score, verbetering met uitleg en score per onderdeel. Optionele tijdslimiet.
 - Zonder login worden scores, de al gekregen vragen en een lopende toets enkel in de browser bewaard.
 
+**Bovenaan elke pagina**
+- Links een **Home**-knop (naar de startpagina) en het kruimelpad; rechts **Inloggen**, of na het inloggen je naam (en **Mijn klassen** voor leerkrachten).
+
 **Account (optioneel, voor leerlingen en leerkrachten)**
-- Inloggen via de knop rechtsboven, met Google, Microsoft of Smartschool (enkel de logins die de beheerder instelde, worden getoond). Smartschool-co-accounts (ouders) worden geweigerd.
+- Via **Inloggen** → **Account maken** kiest iedereen zelf een gebruikersnaam (3 tot 30 tekens: letters, cijfers, `.`, `_`, `-`; hoofdletters maken niet uit), een naam (mag leeg; zichtbaar voor de leerkracht van een klas) en een wachtwoord van minstens 8 tekens.
+- Wachtwoorden worden enkel als hash bewaard (PBKDF2-SHA256, 100 000 iteraties, eigen zout per account). Na 10 foute pogingen per kwartier voor dezelfde gebruikersnaam (of 20 vanaf hetzelfde IP-adres) wordt inloggen tijdelijk geblokkeerd.
+- Er is geen e-mail, dus ook geen "wachtwoord vergeten"-link: de beheerder stelt dan onder **Beheer → Gebruikers** een tijdelijk wachtwoord in, dat de leerling daarna zelf wijzigt bij **Mijn account**.
+- Later kunnen ook Google, Microsoft en Smartschool als login aangezet worden (de code is er al; enkel de logins die de beheerder instelde, worden getoond). Smartschool-co-accounts (ouders) worden dan geweigerd.
 - Met een account: de historiek van alle toetsen en de al gekregen vragen staan op de server, dus op elk toestel dezelfde. Scores die al in de browser stonden, gaan bij het inloggen mee naar het account. Lukt het opslaan even niet (geen internet), dan wordt het later opnieuw geprobeerd.
-- **Mijn account** (`#/mijn`): alle resultaten per hoofdstuk, lid worden van een klas met een klascode, klas verlaten, uitloggen, account en alle gegevens verwijderen.
+- **Mijn account** (`#/mijn`): alle resultaten per hoofdstuk, lid worden van een klas met een klascode, klas verlaten, wachtwoord wijzigen, uitloggen, account en alle gegevens verwijderen.
 - **Leerkrachten** (rol toegekend door de beheerder) maken via **Mijn klassen** (`#/klassen`) klassen aan en krijgen per klas een code van 6 tekens. In het klasoverzicht zien ze per leerling en per hoofdstuk de laatste score, de beste score en het aantal toetsen, enkel van toetsen gemaakt nadat de leerling lid werd.
 - Een **privacyverklaring** staat op `#/privacy` (link onderaan de startpagina).
 
@@ -29,7 +35,7 @@ Oefentoetsen per vak en hoofdstuk voor het secundair onderwijs. Iedereen kan zon
 - **Nakijken**: vragen schrappen, vak/jaar/hoofdstuk/titel aanpassen, eerst zelf uitproberen of als JSON downloaden.
 - **Online zetten**: de server commit `data/<id>.json` en werkt `data/catalog.json` bij in deze repo. GitHub Pages publiceert het na ongeveer een minuut. Het voorstel blijft bewaard (gemarkeerd als *online gezet*), zodat je later opnieuw vragen kan laten maken.
 - **Hoofdstukken**: bewerken, verwijderen, of een kant-en-klaar JSON-bestand laden.
-- **Gebruikers**: iedereen die ooit inlogde, met de rol (leerling of leerkracht) aan te passen, of te verwijderen.
+- **Gebruikers**: iedereen die ooit inlogde, met de rol (leerling of leerkracht) aan te passen, een tijdelijk wachtwoord in te stellen, of te verwijderen.
 - **Instellingen**: Claude API-sleutel, GitHub-token, repository, branch en de logins (client ID en secret per dienst; voor Smartschool ook het adres van de school). Geheimen staan enkel op de server en worden alleen gemaskeerd getoond. Bij elke login staat de redirect URI die je bij de registratie moet opgeven.
 
 ## Opbouw
@@ -38,7 +44,7 @@ Oefentoetsen per vak en hoofdstuk voor het secundair onderwijs. Iedereen kan zon
 index.html            pagina (startpagina, toets, voorstel, beheer)
 css/style.css
 js/app.js             startpagina, toets en routering
-js/account.js         inloggen, mijn account, klassen (leerkracht), privacy
+js/account.js         inloggen en account maken, mijn account, klassen (leerkracht), privacy
 js/voorstel.js        voorstelformulier
 js/beheer.js          beheer (login, voorstellen, nakijken, hoofdstukken, instellingen)
 js/api.js             aanroepen naar de server
@@ -71,7 +77,7 @@ Het eerste antwoord in `a` is altijd het juiste; de toets schudt de volgorde. 2 
 1. **Website**: Settings → Pages → *Deploy from a branch* → `main`, map `/ (root)`. Voor gebuisd.be: vul het in onder *Custom domain*.
 2. **Server**: volg [worker/README.md](worker/README.md) en vul daarna het adres van de server in `js/config.js` in.
 3. **Eerste keer inloggen**: ga naar *Beheer*, log in met het admin-wachtwoord en vul onder *Instellingen* de Claude API-sleutel en het GitHub-token in. Klik op *Verbinding testen*.
-4. **Logins voor leerlingen**: registreer de app bij Google, Microsoft en/of Smartschool (zie [worker/README.md](worker/README.md#logins-voor-leerlingen)) en vul de gegevens in onder *Instellingen*.
+4. **Logins via Google, Microsoft of Smartschool** (optioneel, voor later): registreer de app bij die dienst (zie [worker/README.md](worker/README.md#logins-via-google-microsoft-of-smartschool)) en vul de gegevens in onder *Instellingen*. Zonder dat werkt inloggen met gebruikersnaam en wachtwoord gewoon.
 5. **Privacyverklaring**: lees `#/privacy` na (tekst in `js/account.js`) en vul aan waar nodig, bv. een contactadres.
 
 Lokaal testen: `python3 -m http.server 8765` en open http://localhost:8765. Rechtstreeks `index.html` openen werkt niet, omdat de browser dan geen vragenbestanden laadt.
@@ -79,7 +85,8 @@ Lokaal testen: `python3 -m http.server 8765` en open http://localhost:8765. Rech
 ## Veiligheid
 
 - Bezoekers zien nooit sleutels; de server doet alle aanroepen naar Claude en GitHub.
-- Logins gebruiken OAuth2 met `state` (en PKCE bij Google en Microsoft). De site krijgt nooit een wachtwoord van een leerling. Een leerlingensessie blijft 30 dagen geldig en is ondertekend met een geheime sleutel die de server zelf aanmaakt.
+- Eigen accounts: wachtwoorden enkel als PBKDF2-hash, afremming tegen raden, en de foutmelding verraadt niet of een gebruikersnaam bestaat.
+- Externe logins gebruiken OAuth2 met `state` (en PKCE bij Google en Microsoft). De site krijgt nooit een wachtwoord van een leerling. Een leerlingensessie blijft 30 dagen geldig en is ondertekend met een geheime sleutel die de server zelf aanmaakt.
 - Een leerkracht ziet enkel leerlingen die met de klascode zelf lid werden, en enkel hun toetsen van na dat moment.
 - Het admin-wachtwoord staat als geheim op de server. Na 10 foute pogingen per uur wordt een IP-adres tijdelijk geblokkeerd. Een sessie blijft 7 dagen geldig; een nieuw wachtwoord maakt alle sessies ongeldig.
 - Tegen misbruik: per gebruiker max. 30 uploads en 5 voorstellen per uur, en samen max. 50 voorstellen per dag. Claude maakt alleen vragen als de beheerder erop klikt, dus voorstellen kosten op zich niets.

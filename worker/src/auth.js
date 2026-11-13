@@ -47,6 +47,11 @@ export async function currentUser(req, env, required = true) {
   return u;
 }
 
+export async function issueSession(env, userId) {
+  const exp = Math.floor(Date.now() / 1000) + SESSION_TTL;
+  return { token: await signToken(await userKey(env), { u: userId, exp }), verloopt: exp * 1000 };
+}
+
 /* ---------- OAuth ---------- */
 
 export async function start(req, env, p) {
@@ -124,9 +129,8 @@ export async function callback(req, env, p) {
       u = { id: crypto.randomUUID() };
       await env.DB.prepare("INSERT INTO gebruikers (id, provider, sub, naam, email, rol, aangemaakt, laatst) VALUES (?, ?, ?, ?, ?, 'leerling', ?, ?)").bind(u.id, p, id.sub, naam, email, now, now).run();
     }
-    const exp = Math.floor(now / 1000) + SESSION_TTL;
-    const token = await signToken(await userKey(env), { u: u.id, exp });
-    return back(`#/aangemeld?t=${encodeURIComponent(token)}&exp=${exp * 1000}`);
+    const s = await issueSession(env, u.id);
+    return back(`#/aangemeld?t=${encodeURIComponent(s.token)}&exp=${s.verloopt}`);
   } catch (e) {
     console.error(e);
     return back("#/login?fout=" + encodeURIComponent(e instanceof Fout ? e.message : "Inloggen is mislukt. Probeer het opnieuw."));
