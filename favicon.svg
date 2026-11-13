@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- blad papier met schrijflijnen -->
+  <rect x="8" y="5" width="38" height="50" rx="5" fill="#ffffff" stroke="#1b2540" stroke-width="3.5"/>
+  <g stroke="#2f4fd8" stroke-width="3.5" stroke-linecap="round">
+    <line x1="16" y1="17" x2="38" y2="17"/>
+    <line x1="16" y1="26" x2="38" y2="26"/>
+    <line x1="16" y1="35" x2="27" y2="35"/>
+  </g>
+  <!-- pen die schrijft -->
+  <g transform="translate(29 50) rotate(-45)" stroke="#1b2540" stroke-width="3" stroke-linejoin="round">
+    <path d="M0 0 L9 -5.5 L9 5.5 Z" fill="#f2d3a0"/>
+    <rect x="9" y="-5.5" width="22" height="11" fill="#ffe45c"/>
+    <rect x="31" y="-5.5" width="6" height="11" rx="2" fill="#2f4fd8"/>
+  </g>
+  <circle cx="29" cy="50" r="1.8" fill="#1b2540"/>
+</svg>
