@@ -1,0 +1,19 @@
+name = "gebuisd-api"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Maak de opslag aan met:  npx wrangler kv namespace create KV
+# en vervang hieronder het id door het id dat wrangler toont.
+kv_namespaces = [
+  { binding = "KV", id = "de2d68e50ba343ada6c67d40206ca5e7" }
+]
+
+[vars]
+# Websites die de API mogen gebruiken (komma-gescheiden)
+ALLOWED_ORIGINS = "https://gebuisd.be,https://www.gebuisd.be,https://smaarten.github.io,http://localhost:8765"
+DEFAULT_REPO = "SMaarten/Gebuisd.be"
+DEFAULT_BRANCH = "main"
+
+# Het admin-wachtwoord is een geheim, niet hier invullen. Stel het in met:
+#   npx wrangler secret put ADMIN_PASSWORD

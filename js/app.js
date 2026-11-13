@@ -1,6 +1,7 @@
 import { lsGet, lsSet, lsDel, esc, shuffle, fmt, sortCatalog, catalogEntry } from "./util.js";
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
+export const VRAGEN_PER_TOETS = 20;
 const LS_LIMIT = "gebuisd.limit";
 // Hoofdstukken die op dit toestel klaarstaan: net online gezet (GitHub Pages bouwt nog) of enkel lokaal uitgeprobeerd.
 export const LS_LOCAL = "gebuisd.local";
@@ -86,6 +87,12 @@ async function route() {
       document.title = "Beheer · Gebuisd.be";
       const mod = await import("./beheer.js");
       await mod.renderAdmin($("viewAdmin"));
+    } else if (page === "voorstel") {
+      show("viewAdmin");
+      crumbs([["Alle hoofdstukken", "#/"], ["Hoofdstuk voorstellen"]]);
+      document.title = "Hoofdstuk voorstellen · Gebuisd.be";
+      const mod = await import("./voorstel.js");
+      mod.renderPropose($("viewAdmin"));
     } else {
       show("viewHome");
       crumbs([]);
@@ -150,8 +157,7 @@ function openTest(chapter) {
   crumbs([["Alle hoofdstukken", "#/"], [ch.vak], [ch.nr ? "Hoofdstuk " + ch.nr : ch.titel]]);
   $("tEyebrow").textContent = [ch.vak, ch.graad, ch.nr ? "Hoofdstuk " + ch.nr : ""].filter(Boolean).join(" · ");
   $("tTitle").textContent = ch.titel;
-  const total = testSize();
-  $("tSub").textContent = `${total} meerkeuzevragen, ${perSection()} per onderdeel. ${ch.beschrijving || ""}`.trim();
+  $("tSub").textContent = `${Math.min(VRAGEN_PER_TOETS, ch.vragen.length)} meerkeuzevragen uit alle onderdelen. ${ch.beschrijving || ""}`.trim();
   $("limit").value = lsGet(LS_LIMIT, "0");
 
   const saved = lsGet(key("run"), null);
@@ -165,24 +171,41 @@ function openTest(chapter) {
   }
 }
 
-function perSection() { return Math.max(1, Number(ch.perOnderdeel) || 4); }
-
-function testSize() {
-  return ch.onderdelen.reduce((n, _, s) => n + Math.min(perSection(), ch.vragen.filter(q => q.o === s).length), 0);
+// Verdeel de 20 vragen over de onderdelen, in verhouding tot hun aantal vragen in de bank
+// (elk onderdeel minstens 1, nooit meer dan het heeft).
+export function allocate(counts, total = VRAGEN_PER_TOETS) {
+  const sum = counts.reduce((a, b) => a + b, 0);
+  total = Math.min(total, sum);
+  if (!total) return counts.map(() => 0);
+  const share = counts.map(n => total * n / sum);
+  const alloc = counts.map((n, i) => n ? Math.min(n, Math.max(1, Math.floor(share[i]))) : 0);
+  let diff = total - alloc.reduce((a, b) => a + b, 0);
+  while (diff > 0) {  // tekort: geef aan het onderdeel dat het verst onder zijn aandeel zit
+    let best = -1;
+    alloc.forEach((a, i) => { if (a < counts[i] && (best < 0 || share[i] - a > share[best] - alloc[best])) best = i; });
+    alloc[best]++; diff--;
+  }
+  while (diff < 0) {  // te veel (door het minimum van 1): neem af van wie het verst boven zijn aandeel zit
+    let best = -1;
+    alloc.forEach((a, i) => { if (a > 1 && (best < 0 || a - share[i] > alloc[best] - share[best])) best = i; });
+    alloc[best]--; diff++;
+  }
+  return alloc;
 }
 
 function pickQuestions() {
   let seen = lsGet(key("seen"), []).filter(i => ch.vragen[i]);
   const picked = [];
-  ch.onderdelen.forEach((_, sec) => {
-    const ids = ch.vragen.map((q, i) => q.o === sec ? i : -1).filter(i => i >= 0);
-    let fresh = ids.filter(i => !seen.includes(i));
-    if (fresh.length < perSection()) {
+  const ids = ch.onderdelen.map((_, sec) => ch.vragen.map((q, i) => q.o === sec ? i : -1).filter(i => i >= 0));
+  const alloc = allocate(ids.map(l => l.length));
+  ids.forEach((secIds, sec) => {
+    let fresh = secIds.filter(i => !seen.includes(i));
+    if (fresh.length < alloc[sec]) {
       // alle vragen van dit onderdeel gezien: opnieuw beginnen
       seen = seen.filter(i => ch.vragen[i].o !== sec);
-      fresh = ids;
+      fresh = secIds;
     }
-    picked.push(...shuffle(fresh).slice(0, perSection()));
+    picked.push(...shuffle(fresh).slice(0, alloc[sec]));
   });
   lsSet(key("seen"), seen.concat(picked));
   return picked;
