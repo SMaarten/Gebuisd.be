@@ -1,405 +1,187 @@
-// Beheer: een nieuw vak of hoofdstuk toevoegen.
-// 1. Cursus uploaden (PDF, foto's of tekst)  2. Claude maakt de vragenbank
-// 3. Nakijken en vragen schrappen            4. Online zetten = commit naar de GitHub-repo
-import { lsGet, lsSet, lsDel, esc, chapterId, validateChapter, catalogEntry, serializeChapter, sortCatalog } from "./util.js";
+// Beheer (enkel admin, met wachtwoord):
+//  - voorstellen van bezoekers bekijken en er met Claude een vragenbank van laten maken
+//  - vragen nakijken en het hoofdstuk online zetten (de server commit naar GitHub)
+//  - bestaande hoofdstukken bewerken of verwijderen
+//  - instellingen: Claude-sleutel, GitHub-token, repo en branch (staan enkel op de server)
+import { lsGet, lsSet, lsDel, esc, chapterId, validateChapter, serializeChapter } from "./util.js";
 import { loadCatalog, clearCatalogCache, LS_LOCAL } from "./app.js";
+import { api, apiUrl, session, setSession, logout, ApiFout } from "./api.js";
 
-const SDK_URL = "https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.3.0/+esm";
-const MODEL = "claude-opus-5-5";
-const LS_CFG = "gebuisd.admin";
 const LS_DRAFT = "gebuisd.draft";
-const MAX_REQUEST_BYTES = 30 * 1024 * 1024; // API-limiet is 32 MB per aanvraag
 
-let root, cfg, files = [], draft = null, busy = false, abortCtl = null;
+let root, draft = null, generating = null;
 
-const SYSTEM = `Je maakt oefentoetsen voor leerlingen in het Vlaamse secundair onderwijs. Je krijgt het cursusmateriaal van één hoofdstuk (PDF's, foto's van een handboek of tekst) en maakt er een vragenbank met meerkeuzevragen van, waarmee een leerling zich voorbereidt op de toets.
-
-Opbouw
-- Verdeel het hoofdstuk in de onderdelen die de cursus zelf gebruikt (bv. 3.1, 3.2, ...), met de nummering en titels uit de cursus. Gebruikt de cursus geen onderdelen, maak er dan zelf 3 tot 7 logische, met nummers in de vorm <hoofdstuk>.<volgnummer>.
-- Spreid de vragen over alle onderdelen, in verhouding tot hoeveel leerstof elk onderdeel bevat. De toets trekt per onderdeel een vast aantal vragen (zie de opdracht); elk onderdeel moet er minstens drie keer zoveel hebben, zodat een leerling meerdere verschillende toetsen kan maken.
-
-Vragen
-- Toets wat in de cursus staat: begrippen, definities, eigenschappen, en vooral toepassingen en oefeningen in de stijl van de cursus. Gebruik de oefeningen uit de cursus als voorbeeld, maar varieer getallen en situaties.
-- Elke vraag is op zichzelf te begrijpen, zonder de cursus of een figuur erbij. Verwijs niet naar "de figuur", "oefening 4" of "de tekst hierboven". Heb je een figuur nodig, beschrijf dan in woorden wat de leerling moet weten.
-- Precies één antwoord is juist, en dat ondubbelzinnig. Reken elk juist antwoord zelf na en controleer dat geen enkel fout antwoord ook juist kan zijn.
-- Geef 3 foute antwoorden. Alleen als een vraag maar twee zinnige opties heeft (zoals waar/onwaar), geef je er 1. Foute antwoorden zijn geloofwaardig: ze volgen uit typische fouten van leerlingen (een rekenfout, de verkeerde volgorde, verwarring met een verwant begrip). Geen grapantwoorden, geen "alle bovenstaande" of "geen van bovenstaande". Alle antwoorden zijn verschillend en ongeveer even lang, zodat de lengte het antwoord niet verraadt.
-- De uitleg (1 tot 3 zinnen) legt uit waarom het juiste antwoord juist is en, waar dat helpt, welke denkfout tot een fout antwoord leidt.
-- Varieer de moeilijkheid: ongeveer een derde eenvoudig, de helft gemiddeld, de rest uitdagend.
-- Herhaal geen vragen: elke vraag toetst iets anders, of hetzelfde met duidelijk andere gegevens.
-
-Taal en notatie
-- Schrijf correct Nederlands zoals het in Vlaanderen op school gebruikt wordt, met de terminologie van de cursus. Spreek de leerling aan met "je".
-- Getallen: decimale komma en een spatie als duizendtalscheiding (1 250,5). Gebruik in wiskunde · voor vermenigvuldigen en : voor delen, tenzij de cursus het anders doet.
-- Schrijf platte tekst met Unicode-tekens voor symbolen en exponenten (x², √, ≤, π, →). Geen LaTeX, geen Markdown.
-
-Velden
-- titel: de titel van het hoofdstuk zoals in de cursus.
-- beschrijving: één korte zin praktische info voor de leerling, bv. "Zonder rekentoestel." of "Ken de begrippen en hun betekenis."`;
-
-const SCHEMA = {
-  type: "object", additionalProperties: false, required: ["titel", "beschrijving", "onderdelen"],
-  properties: {
-    titel: { type: "string" },
-    beschrijving: { type: "string" },
-    onderdelen: {
-      type: "array",
-      items: {
-        type: "object", additionalProperties: false, required: ["nr", "titel", "vragen"],
-        properties: {
-          nr: { type: "string" },
-          titel: { type: "string" },
-          vragen: {
-            type: "array",
-            items: {
-              type: "object", additionalProperties: false, required: ["vraag", "juist", "fout", "uitleg"],
-              properties: {
-                vraag: { type: "string" },
-                juist: { type: "string" },
-                fout: { type: "array", items: { type: "string" } },
-                uitleg: { type: "string" }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-};
-
-/* ---------- Weergave ---------- */
-
-export async function renderAdmin(el) {
-  root = el;
-  cfg = { repo: "SMaarten/Gebuisd.be", branch: "main", anthropicKey: "", githubToken: "", ...lsGet(LS_CFG, {}) };
-  draft = lsGet(LS_DRAFT, null);
-  const cat = await loadCatalog(true).catch(() => []);
-  const vakken = [...new Set(cat.map(h => h.vak))];
-  const graden = [...new Set(cat.map(h => h.graad).filter(Boolean))];
-
-  root.innerHTML = `
-    <header class="top">
-      <span class="eyebrow">Beheer</span>
-      <h1>Vak of hoofdstuk <mark>toevoegen</mark></h1>
-      <p class="sub">Upload de cursus. Claude maakt er meerkeuzevragen van. Jij kijkt ze na en zet het hoofdstuk online voor iedereen.</p>
-    </header>
-
-    <details class="panel settings" id="settings" ${cfg.anthropicKey && cfg.githubToken ? "" : "open"}>
-      <summary>Instellingen ${cfg.anthropicKey && cfg.githubToken ? '<span class="muted" style="font-weight:400">· ingesteld</span>' : '<span class="muted" style="font-weight:400">· nodig voor je begint</span>'}</summary>
-      <div class="form">
-        <div class="fields">
-          <label class="field"><span>Claude API-sleutel</span>
-            <input type="password" id="cKey" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" value="${esc(cfg.anthropicKey)}">
-            <small>Maak er een op <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">platform.claude.com</a>. Nodig om vragen te laten maken.</small>
-          </label>
-          <label class="field"><span>GitHub-token</span>
-            <input type="password" id="cGh" autocomplete="off" spellcheck="false" placeholder="github_pat_…" value="${esc(cfg.githubToken)}">
-            <small>Fine-grained token met enkel <i>Contents: Read and write</i> op deze repo. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Token maken</a>. Nodig om online te zetten.</small>
-          </label>
-          <label class="field"><span>Repository</span>
-            <input id="cRepo" spellcheck="false" value="${esc(cfg.repo)}"><small>eigenaar/naam</small>
-          </label>
-          <label class="field"><span>Branch</span>
-            <input id="cBranch" spellcheck="false" value="${esc(cfg.branch)}"><small>de branch die GitHub Pages publiceert</small>
-          </label>
-        </div>
-        <p class="hint">De sleutels blijven enkel in deze browser op dit toestel. Gebruik dit niet op een gedeelde computer.</p>
-        <div class="row">
-          <button class="btn primary" type="button" id="cSave">Bewaren</button>
-          <button class="btn" type="button" id="cTest">Verbinding testen</button>
-          <button class="btn danger" type="button" id="cForget">Sleutels wissen</button>
-        </div>
-        <p class="status" id="cStatus" role="status"></p>
-      </div>
-    </details>
-
-    <section class="panel form" id="upload">
-      <h2>1. Cursus uploaden</h2>
-      <div class="fields">
-        <label class="field"><span>Vak</span>
-          <input id="fVak" list="vakList" placeholder="bv. Wiskunde, Frans, Geschiedenis" value="${esc(lsGet("gebuisd.lastVak", ""))}">
-          <datalist id="vakList">${vakken.map(v => `<option value="${esc(v)}">`).join("")}</datalist>
-          <small>Een nieuwe naam maakt een nieuw vak aan.</small>
-        </label>
-        <label class="field"><span>Jaar</span>
-          <input id="fGraad" list="graadList" placeholder="bv. 1ste jaar" value="${esc(lsGet("gebuisd.lastGraad", graden[0] || ""))}">
-          <datalist id="graadList">${["1ste jaar", "2de jaar", "3de jaar", "4de jaar", "5de jaar", "6de jaar", ...graden].filter((g, i, a) => a.indexOf(g) === i).map(g => `<option value="${esc(g)}">`).join("")}</datalist>
-        </label>
-        <label class="field"><span>Hoofdstuk</span>
-          <input id="fNr" inputmode="decimal" placeholder="bv. 4">
-        </label>
-        <label class="field"><span>Titel <small>(mag leeg)</small></span>
-          <input id="fTitel" placeholder="Claude neemt de titel uit de cursus">
-        </label>
-      </div>
-      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Bestanden kiezen">
-        <strong>Sleep bestanden hierheen</strong> of klik om te kiezen<br>
-        <small>PDF, foto's van de cursus (JPG, PNG) of tekst. Meerdere bestanden mag. Word? Bewaar eerst als PDF.</small>
-      </div>
-      <input type="file" id="fFiles" multiple accept="application/pdf,image/*,text/plain,.md,.txt" hidden>
-      <ul class="files" id="fileList"></ul>
-      <div class="fields">
-        <label class="field"><span>Aantal vragen in de vragenbank</span>
-          <input type="number" id="fCount" min="20" max="250" step="10" value="80">
-          <small>Meer vragen = meer verschillende toetsen. 60 tot 120 is een goed aantal.</small>
-        </label>
-        <label class="field"><span>Vragen per onderdeel in een toets</span>
-          <input type="number" id="fPer" min="1" max="10" value="4">
-        </label>
-      </div>
-      <label class="field"><span>Extra instructies <small>(mag leeg)</small></span>
-        <textarea id="fExtra" rows="3" placeholder="bv. Paragraaf 4.5 is geen leerstof. Zonder rekentoestel. Leg de nadruk op de woordenschat."></textarea>
-      </label>
-      <div class="row">
-        <button class="btn primary" type="button" id="genBtn">Vragen laten maken</button>
-        <button class="btn" type="button" id="stopBtn" hidden>Stoppen</button>
-        <span class="muted" style="font-size:14px">of <button type="button" class="linkbtn" id="jsonBtn">laad een kant-en-klaar JSON-bestand</button></span>
-        <input type="file" id="fJson" accept="application/json,.json" hidden>
-      </div>
-      <p class="status" id="gStatus" role="status" aria-live="polite"></p>
-    </section>
-
-    <section class="panel form" id="review" hidden></section>
-
-    <section class="panel form" id="existing">
-      <h2>Bestaande hoofdstukken</h2>
-      ${cat.length ? `<ul class="admlist">${cat.map(h => `<li><span><b>${esc(h.vak)}</b> · ${esc([h.graad, h.nr ? "H" + h.nr : ""].filter(Boolean).join(" "))} ${esc(h.titel)} <span class="muted">(${h.vragen} vragen${h.lokaal ? ", " + esc(h.lokaal) : ""})</span></span>
-        <span class="row"><a class="btn small" href="#/toets/${encodeURIComponent(h.id)}">Openen</a><button class="btn small" type="button" data-edit="${esc(h.id)}">Bewerken</button><button class="btn small danger" type="button" data-del="${esc(h.id)}">Verwijderen</button></span></li>`).join("")}</ul>` : `<p class="hint">Nog geen hoofdstukken.</p>`}
-      <p class="status" id="eStatus" role="status"></p>
-    </section>`;
-
-  bind();
-  renderFiles();
-  if (draft) renderReview();
-}
-
-function $(id) { return root.querySelector("#" + id); }
+const $ = id => root.querySelector("#" + id);
+const kb = n => n > 1048576 ? (n / 1048576).toFixed(1).replace(".", ",") + " MB" : Math.max(1, Math.round(n / 1024)) + " kB";
+const datum = ts => new Date(ts).toLocaleDateString("nl-BE", { day: "numeric", month: "short", year: "numeric" });
 
 function status(id, text, kind) {
   const el = $(id);
+  if (!el) return;
   el.innerHTML = text;
   el.className = "status" + (kind ? " " + kind : "");
 }
 
-function bind() {
-  $("cSave").onclick = () => { readCfg(); lsSet(LS_CFG, cfg); status("cStatus", "Bewaard.", "ok"); };
-  $("cForget").onclick = () => {
-    cfg.anthropicKey = cfg.githubToken = "";
-    $("cKey").value = $("cGh").value = "";
-    lsSet(LS_CFG, cfg);
-    status("cStatus", "Sleutels gewist uit deze browser.", "ok");
-  };
-  $("cTest").onclick = testConnection;
-
-  const drop = $("drop"), input = $("fFiles");
-  drop.onclick = () => input.click();
-  drop.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } };
-  drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
-  drop.ondragleave = () => drop.classList.remove("over");
-  drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); addFiles(e.dataTransfer.files); };
-  input.onchange = () => { addFiles(input.files); input.value = ""; };
-  $("fileList").onclick = e => {
-    const i = e.target.dataset.rm;
-    if (i !== undefined) { files.splice(Number(i), 1); renderFiles(); }
-  };
-
-  $("genBtn").onclick = generate;
-  $("stopBtn").onclick = () => abortCtl?.abort();
-  $("jsonBtn").onclick = () => $("fJson").click();
-  $("fJson").onchange = importJson;
-  $("existing").onclick = e => {
-    if (e.target.dataset.del) removeChapter(e.target.dataset.del, e.target);
-    if (e.target.dataset.edit) editChapter(e.target.dataset.edit);
-  };
+// Bij een verlopen sessie terug naar het loginscherm.
+function handle(e, statusId) {
+  if (e instanceof ApiFout && e.status === 401) { renderAdmin(root); return; }
+  status(statusId, esc(e.message || String(e)), "err");
 }
 
-function readCfg() {
-  cfg.anthropicKey = $("cKey").value.trim();
-  cfg.githubToken = $("cGh").value.trim();
-  cfg.repo = $("cRepo").value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
-  cfg.branch = $("cBranch").value.trim() || "main";
-}
+/* ---------- Login ---------- */
 
-/* ---------- Bestanden ---------- */
-
-const kb = n => n > 1048576 ? (n / 1048576).toFixed(1).replace(".", ",") + " MB" : Math.max(1, Math.round(n / 1024)) + " kB";
-
-function addFiles(list) {
-  for (const f of list) {
-    const ok = f.type === "application/pdf" || f.type.startsWith("image/") || f.type.startsWith("text/") || /\.(md|txt)$/i.test(f.name);
-    if (!ok) { status("gStatus", `${esc(f.name)}: dit bestandstype wordt niet ondersteund. Bewaar het als PDF.`, "err"); continue; }
-    files.push(f);
+export async function renderAdmin(el) {
+  root = el;
+  if (!apiUrl()) {
+    root.innerHTML = `<header class="top"><span class="eyebrow">Beheer</span><h1>Server nog niet ingesteld</h1></header>
+      <p class="panel msg">Vul in <code>js/config.js</code> het adres van de Gebuisd.be API in. Zie <code>worker/README.md</code>.</p>`;
+    return;
   }
-  renderFiles();
+  if (!session()) return renderLogin();
+  draft = lsGet(LS_DRAFT, null);
+  root.innerHTML = `
+    <header class="top">
+      <span class="eyebrow">Beheer</span>
+      <h1>Voorstellen en <mark>hoofdstukken</mark></h1>
+      <div class="row"><p class="sub" style="flex:1">Ingelogd als beheerder.</p><button class="btn small" type="button" id="logoutBtn">Uitloggen</button></div>
+    </header>
+    <section class="panel form" id="proposals"><h2>Voorstellen</h2><p class="sub"><span class="spin"></span>Laden…</p></section>
+    <section class="panel form" id="review" hidden></section>
+    <section class="panel form" id="existing"><h2>Hoofdstukken</h2><p class="sub"><span class="spin"></span>Laden…</p></section>
+    <details class="panel settings" id="settings"><summary>Instellingen</summary><div class="form" id="settingsBody"><p class="sub"><span class="spin"></span>Laden…</p></div></details>`;
+  $("logoutBtn").onclick = () => { logout(); renderAdmin(root); };
+  $("settings").ontoggle = () => { if ($("settings").open) renderSettings(); };
+  renderReview();
+  await Promise.all([renderProposals(), renderExisting()]);
 }
 
-function renderFiles() {
-  $("fileList").innerHTML = files.map((f, i) => `<li><span>${esc(f.name)} <span class="muted">· ${kb(f.size)}</span></span><button class="btn small" type="button" data-rm="${i}">Weg</button></li>`).join("");
-}
-
-function readAs(file, how) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result);
-    r.onerror = () => rej(new Error(`${file.name} kon niet gelezen worden.`));
-    how === "text" ? r.readAsText(file) : r.readAsDataURL(file);
-  });
-}
-
-// Foto's verkleinen tot max. 2000 px (de API weigert beelden boven 5 MB en schaalt groter toch af).
-async function imageBlock(file) {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error(`${file.name} is geen leesbare afbeelding.`)); im.src = url; });
-    const scale = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
-    const c = document.createElement("canvas");
-    c.width = Math.round(img.naturalWidth * scale);
-    c.height = Math.round(img.naturalHeight * scale);
-    const g = c.getContext("2d");
-    g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
-    g.drawImage(img, 0, 0, c.width, c.height);
-    const data = c.toDataURL("image/jpeg", 0.85).split(",")[1];
-    return { type: "image", source: { type: "base64", media_type: "image/jpeg", data } };
-  } finally { URL.revokeObjectURL(url); }
-}
-
-async function contentBlocks() {
-  const blocks = [];
-  let bytes = 0;
-  for (const f of files) {
-    let b;
-    if (f.type === "application/pdf") {
-      const data = (await readAs(f, "url")).split(",")[1];
-      b = { type: "document", source: { type: "base64", media_type: "application/pdf", data }, title: f.name };
-      bytes += data.length;
-    } else if (f.type.startsWith("image/")) {
-      b = await imageBlock(f);
-      bytes += b.source.data.length;
-    } else {
-      const data = await readAs(f, "text");
-      b = { type: "document", source: { type: "text", media_type: "text/plain", data }, title: f.name };
-      bytes += data.length;
+function renderLogin() {
+  root.innerHTML = `
+    <header class="top">
+      <span class="eyebrow">Beheer</span>
+      <h1>Inloggen</h1>
+      <p class="sub">Enkel voor de beheerder. Bezoekers hebben geen login nodig om toetsen te maken of een hoofdstuk voor te stellen.</p>
+    </header>
+    <form class="panel form login" id="loginForm">
+      <label class="field"><span>Wachtwoord</span><input type="password" id="pw" autocomplete="current-password" required></label>
+      <div class="row"><button class="btn primary" type="submit">Inloggen</button></div>
+      <p class="status" id="lStatus" role="status"></p>
+    </form>`;
+  $("pw").focus();
+  $("loginForm").onsubmit = async e => {
+    e.preventDefault();
+    const btn = e.submitter || root.querySelector("button[type=submit]");
+    btn.disabled = true;
+    status("lStatus", `<span class="spin"></span>Controleren…`);
+    try {
+      setSession(await api("/login", { method: "POST", body: { wachtwoord: $("pw").value } }));
+      renderAdmin(root);
+    } catch (err) {
+      status("lStatus", esc(err.message), "err");
+      btn.disabled = false;
+      $("pw").select();
     }
-    blocks.push(b);
-  }
-  if (bytes > MAX_REQUEST_BYTES) throw new Error(`De bestanden zijn samen te groot (${kb(bytes)} na omzetting, max. ongeveer 30 MB). Laat overbodige pagina's weg of splits het hoofdstuk.`);
-  return blocks;
+  };
 }
 
-/* ---------- Vragen laten maken ---------- */
+/* ---------- Voorstellen ---------- */
 
-function meta() {
-  const vak = $("fVak").value.trim(), graad = $("fGraad").value.trim(), nr = $("fNr").value.trim();
-  return { vak, graad, nr, titel: $("fTitel").value.trim(), count: Math.min(250, Math.max(10, Number($("fCount").value) || 80)), per: Math.min(10, Math.max(1, Number($("fPer").value) || 4)), extra: $("fExtra").value.trim() };
+async function renderProposals() {
+  const box = $("proposals");
+  let list;
+  try { list = await api("/voorstellen", { admin: true }); }
+  catch (e) { if (e.status === 401) return renderAdmin(root); box.innerHTML = `<h2>Voorstellen</h2><p class="status err">${esc(e.message)}</p>`; return; }
+  const open = list.filter(v => !v.online).length;
+  box.innerHTML = `<h2>Voorstellen <span class="muted" style="font-weight:400;font-size:15px">· ${open} te behandelen</span></h2>
+    ${list.length ? "" : `<p class="hint">Nog geen voorstellen. Bezoekers sturen ze in via "+ Hoofdstuk toevoegen" op de startpagina.</p>`}
+    ${list.map(v => `
+      <div class="vs" data-id="${esc(v.id)}">
+        <div class="top">
+          <p><b>${esc(v.vak)}</b> · ${esc([v.graad, "hoofdstuk " + v.nr].filter(Boolean).join(" · "))}${v.titel ? " · " + esc(v.titel) : ""}
+            ${v.online ? `<span class="tag">online gezet</span>` : ""}</p>
+          <span class="row">
+            <button class="btn small primary" type="button" data-gen="${esc(v.id)}">${v.online ? "Opnieuw vragen maken" : "Vragen laten maken"}</button>
+            <button class="btn small danger" type="button" data-delv="${esc(v.id)}">Verwijderen</button>
+          </span>
+        </div>
+        <p class="muted">Ingediend ${datum(v.ingediend)}${v.naam ? " door " + esc(v.naam) : ""}${v.online ? ` · online sinds ${datum(v.online)}` : ""}</p>
+        <p class="muted">${v.bestanden.map(f => `${esc(f.naam)} (${kb(f.grootte)})`).join(" · ")}</p>
+        ${v.opmerking ? `<p>“${esc(v.opmerking)}”</p>` : ""}
+        <p class="status" id="g-${esc(v.id)}" role="status" aria-live="polite"></p>
+      </div>`).join("")}`;
+  box.onclick = e => {
+    const g = e.target.dataset.gen, d = e.target.dataset.delv;
+    if (g) generate(list.find(v => v.id === g), e.target);
+    if (d) deleteProposal(d, e.target);
+  };
 }
 
-async function generate() {
-  if (busy) return;
-  readCfg();
-  const m = meta();
-  if (!cfg.anthropicKey) { $("settings").open = true; return status("gStatus", "Vul eerst je Claude API-sleutel in bij Instellingen.", "err"); }
-  if (!m.vak || !m.nr) return status("gStatus", "Vul minstens het vak en het hoofdstuknummer in.", "err");
-  if (!files.length) return status("gStatus", "Kies eerst een of meer bestanden met de leerstof.", "err");
-  if (draft && !confirm("Er staat nog een niet-opgeslagen vragenbank klaar. Die wordt vervangen. Doorgaan?")) return;
-  lsSet(LS_CFG, cfg);
-  lsSet("gebuisd.lastVak", m.vak);
-  lsSet("gebuisd.lastGraad", m.graad);
+async function deleteProposal(id, btn) {
+  if (!confirm("Dit voorstel en de ingestuurde cursus verwijderen? Een hoofdstuk dat al online staat, blijft online.")) return;
+  btn.disabled = true;
+  try { await api(`/voorstellen/${id}`, { method: "DELETE", admin: true }); await renderProposals(); }
+  catch (e) { btn.disabled = false; handle(e, "g-" + id); }
+}
 
-  busy = true;
-  abortCtl = new AbortController();
-  $("genBtn").disabled = true;
-  $("stopBtn").hidden = false;
+async function generate(v, btn) {
+  if (generating) return status("g-" + v.id, "Er wordt al een vragenbank gemaakt. Wacht tot die klaar is.", "err");
+  if (draft && !confirm("Er staat nog een niet-opgeslagen vragenbank klaar om na te kijken. Die wordt vervangen. Doorgaan?")) return;
+  generating = v.id;
+  root.querySelectorAll("[data-gen]").forEach(b => { b.disabled = true; });
+  const sid = "g-" + v.id;
   const t0 = Date.now();
-  let shown = 0, timer = null;
+  let n = 0;
+  const show = () => {
+    const s = Math.round((Date.now() - t0) / 1000);
+    status(sid, `<span class="spin"></span>${n ? `Claude schrijft vragen… ${n} klaar` : "Claude leest de cursus en plant de vragen…"} <span class="muted">(${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")})</span>\n<small class="muted">Dit duurt enkele minuten. Laat dit tabblad open.</small>`);
+  };
+  show();
+  const timer = setInterval(show, 1000);
   try {
-    status("gStatus", `<span class="spin"></span>Bestanden voorbereiden…`);
-    const blocks = await contentBlocks();
-    status("gStatus", `<span class="spin"></span>Claude leest de cursus…`);
-    const { default: Anthropic } = await import(SDK_URL);
-    const client = new Anthropic({ apiKey: cfg.anthropicKey, dangerouslyAllowBrowser: true, maxRetries: 2 });
-
-    const task = [
-      `Vak: ${m.vak}`, m.graad && `Jaar: ${m.graad}`, `Hoofdstuk: ${m.nr}`, m.titel && `Titel: ${m.titel}`,
-      `Maak in totaal ongeveer ${m.count} vragen. Een toets trekt ${m.per} vragen per onderdeel.`,
-      m.extra && `Extra instructies:\n${m.extra}`
-    ].filter(Boolean).join("\n");
-
-    let text = "";
-    const tick = () => {
-      const n = (text.match(/"vraag"\s*:/g) || []).length;
-      const s = Math.round((Date.now() - t0) / 1000);
-      status("gStatus", `<span class="spin"></span>${n ? `Claude schrijft vragen… ${n} klaar` : "Claude leest de cursus en plant de vragen…"} <span class="muted">(${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")})</span>\n<small class="muted">Dit duurt enkele minuten. Laat dit tabblad open.</small>`);
-    };
-    timer = setInterval(tick, 1000);
-
-    const params = {
-      model: MODEL,
-      max_tokens: 64000,
-      output_config: { effort: "high", format: { type: "json_schema", schema: SCHEMA } },
-      system: SYSTEM,
-      messages: [{ role: "user", content: [...blocks, { type: "text", text: task }] }],
-      // bij een weigering door de veiligheidsfilter probeert de API zelf een ander model
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default"
-    };
-    const run = async p => {
-      text = "";
-      const stream = client.beta.messages.stream(p, { signal: abortCtl.signal });
-      stream.on("text", d => { text += d; });
-      return stream.finalMessage();
-    };
-    let msg;
-    try { msg = await run(params); }
-    catch (e) {
-      // als de fallback-optie (nog) niet aanvaard wordt: opnieuw zonder
-      if (e?.status === 400 && /fallback|beta/i.test(e.message || "")) {
-        const { betas, fallbacks, ...rest } = params;
-        msg = await run(rest);
-      } else throw e;
+    const res = await api(`/voorstellen/${v.id}/genereer`, { method: "POST", admin: true, raw: true });
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "", done = null;
+    for (;;) {
+      const { value, done: end } = await reader.read();
+      if (value) buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (!line) continue;
+        const ev = JSON.parse(line);
+        if (ev.type === "bezig") n = ev.vragen;
+        if (ev.type === "fout") throw new Error(ev.melding);
+        if (ev.type === "klaar") done = ev;
+      }
+      if (end) break;
     }
-
-    if (msg.stop_reason === "refusal") throw new Error("Claude weigerde dit materiaal te verwerken. Controleer of de bestanden enkel leerstof bevatten.");
-    if (msg.stop_reason === "max_tokens") throw new Error("Het antwoord werd te lang en is afgebroken. Vraag minder vragen of splits het hoofdstuk.");
-    // enkel de tekst na een eventuele overstap naar een ander model telt
-    let start = 0;
-    msg.content.forEach((b, i) => { if (b.type === "fallback") start = i + 1; });
-    const json = msg.content.slice(start).filter(b => b.type === "text").map(b => b.text).join("");
+    if (!done) throw new Error("De verbinding met de server werd onderbroken. Probeer opnieuw.");
+    if (done.stop_reason === "refusal") throw new Error("Claude weigerde dit materiaal te verwerken. Controleer of de bestanden enkel leerstof bevatten.");
+    if (done.stop_reason === "max_tokens") throw new Error("Het antwoord werd te lang en is afgebroken. Splits het hoofdstuk in twee voorstellen.");
     let out;
-    try { out = JSON.parse(json); } catch { throw new Error("Het antwoord van Claude was geen geldige vragenbank. Probeer opnieuw."); }
-
-    draft = toChapter(out, m);
+    try { out = JSON.parse(done.tekst); } catch { throw new Error("Het antwoord van Claude was geen geldige vragenbank. Probeer opnieuw."); }
+    draft = toChapter(out, v);
     const errs = validateChapter(draft);
     if (errs.length) throw new Error("De vragenbank heeft fouten:\n" + errs.join("\n"));
     lsSet(LS_DRAFT, draft);
-    const u = msg.usage || {};
+    const u = done.usage || {};
     const cost = ((u.input_tokens || 0) * 4 + (u.output_tokens || 0) * 20) / 1e6;
-    status("gStatus", `Klaar: ${draft.vragen.length} vragen in ${draft.onderdelen.length} onderdelen. <span class="muted">Kostprijs ongeveer $${cost.toFixed(2)}.</span> Kijk ze hieronder na.`, "ok");
+    status(sid, `Klaar: ${draft.vragen.length} vragen in ${draft.onderdelen.length} onderdelen. <span class="muted">Kostprijs ongeveer $${cost.toFixed(2)}.</span> Kijk ze hieronder na.`, "ok");
     renderReview();
     $("review").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
     console.error(e);
-    status("gStatus", esc(friendlyError(e)), "err");
+    handle(e, sid);
   } finally {
     clearInterval(timer);
-    busy = false;
-    $("genBtn").disabled = false;
-    $("stopBtn").hidden = true;
+    generating = null;
+    root.querySelectorAll("[data-gen]").forEach(b => { b.disabled = false; });
   }
 }
 
-function friendlyError(e) {
-  if (e?.name === "AbortError" || /abort/i.test(e?.message || "")) return "Gestopt.";
-  const s = e?.status;
-  if (s === 401) return "De Claude API-sleutel klopt niet. Controleer hem bij Instellingen.";
-  if (s === 403) return "Deze API-sleutel heeft geen toegang. Controleer je account op platform.claude.com.";
-  if (s === 413) return "De bestanden zijn te groot voor één aanvraag. Laat pagina's weg of splits het hoofdstuk.";
-  if (s === 429) return "Te veel aanvragen of je tegoed is op. Wacht even of vul je tegoed aan op platform.claude.com.";
-  if (s === 529 || s >= 500) return "De Claude-server is even overbelast. Probeer het over een paar minuten opnieuw.";
-  if (s === 400) return "De aanvraag werd geweigerd: " + (e.error?.error?.message || e.message);
-  if (/Failed to fetch|NetworkError|Load failed/i.test(e?.message || "")) return "Geen verbinding. Controleer je internet en probeer opnieuw.";
-  return e?.message || String(e);
-}
-
-function toChapter(out, m) {
+function toChapter(out, v) {
   const onderdelen = [], vragen = [];
   for (const o of out.onderdelen || []) {
     const qs = (o.vragen || []).filter(q => q.vraag && q.juist && Array.isArray(q.fout) && q.fout.length);
@@ -412,33 +194,14 @@ function toChapter(out, m) {
       vragen.push({ o: idx, v: q.vraag.trim(), a, u: (q.uitleg || "").trim() });
     }
   }
-  const titel = m.titel || String(out.titel || "").trim() || `Hoofdstuk ${m.nr}`;
   return {
-    id: chapterId(m.vak, m.graad, m.nr),
-    vak: m.vak, graad: m.graad, nr: m.nr, titel,
+    id: chapterId(v.vak, v.graad, v.nr),
+    vak: v.vak, graad: v.graad, nr: v.nr,
+    titel: v.titel || String(out.titel || "").trim() || `Hoofdstuk ${v.nr}`,
     beschrijving: String(out.beschrijving || "").trim(),
-    perOnderdeel: m.per,
-    onderdelen, vragen
+    onderdelen, vragen,
+    voorstel: v.id
   };
-}
-
-async function importJson() {
-  const f = $("fJson").files[0];
-  $("fJson").value = "";
-  if (!f) return;
-  try {
-    const c = JSON.parse(await readAs(f, "text"));
-    const errs = validateChapter(c);
-    if (errs.length) throw new Error(errs.join("\n"));
-    if (draft && !confirm("Er staat nog een niet-opgeslagen vragenbank klaar. Die wordt vervangen. Doorgaan?")) return;
-    draft = c;
-    lsSet(LS_DRAFT, draft);
-    status("gStatus", `${esc(f.name)} geladen: ${c.vragen.length} vragen.`, "ok");
-    renderReview();
-    $("review").scrollIntoView({ behavior: "smooth", block: "start" });
-  } catch (e) {
-    status("gStatus", "Dit bestand is geen geldige vragenbank:\n" + esc(e.message), "err");
-  }
 }
 
 /* ---------- Nakijken ---------- */
@@ -447,21 +210,22 @@ function renderReview() {
   const box = $("review");
   if (!draft) { box.hidden = true; box.innerHTML = ""; return; }
   const per = draft.onderdelen.map((_, s) => draft.vragen.filter(q => q.o === s).length);
+  const tests = Math.floor(draft.vragen.length / 20);
   box.innerHTML = `
-    <h2>2. Nakijken</h2>
-    <p class="hint">Lees de vragen na en schrap wat fout of onduidelijk is. Het groene antwoord is het juiste. Wijzigingen worden meteen bewaard in deze browser.</p>
+    <h2>Nakijken</h2>
+    <p class="hint">Lees de vragen na en schrap wat fout of onduidelijk is. Het groene antwoord is het juiste. Wijzigingen worden meteen bewaard in deze browser.
+      ${draft.vragen.length} vragen: genoeg voor ${tests || "minder dan"} ${tests === 1 ? "toets" : "toetsen"} van 20 zonder herhaling.</p>
     <div class="fields">
       <label class="field"><span>Vak</span><input data-m="vak" value="${esc(draft.vak)}"></label>
       <label class="field"><span>Jaar</span><input data-m="graad" value="${esc(draft.graad)}"></label>
       <label class="field"><span>Hoofdstuk</span><input data-m="nr" value="${esc(draft.nr)}"></label>
-      <label class="field"><span>Vragen per onderdeel in een toets</span><input type="number" min="1" max="10" data-m="perOnderdeel" value="${esc(draft.perOnderdeel)}"></label>
     </div>
     <label class="field"><span>Titel</span><input data-m="titel" value="${esc(draft.titel)}"></label>
     <label class="field"><span>Korte info voor de leerling</span><input data-m="beschrijving" value="${esc(draft.beschrijving || "")}"></label>
     <p class="hint">Bestandsnaam: <code>data/${esc(draft.id)}.json</code></p>
     ${draft.onderdelen.map((o, s) => `
       <details ${s === 0 ? "open" : ""}>
-        <summary><b>${esc(o.nr)} ${esc(o.titel)}</b> <span class="muted">· ${per[s]} vragen${per[s] < (draft.perOnderdeel || 4) ? " · te weinig voor een toets" : ""}</span></summary>
+        <summary><b>${esc(o.nr)} ${esc(o.titel)}</b> <span class="muted">· ${per[s]} vragen</span></summary>
         <div class="preview" style="margin-top:10px">
           ${draft.vragen.map((q, i) => q.o !== s ? "" : `
             <div class="pq"><div class="top"><p>${esc(q.v)}</p><button class="btn small danger" type="button" data-rmq="${i}">Schrappen</button></div>
@@ -470,27 +234,25 @@ function renderReview() {
             </div>`).join("")}
         </div>
       </details>`).join("")}
-    <h2>3. Online zetten</h2>
     <div class="row">
       <button class="btn primary" type="button" id="pubBtn">Online zetten</button>
       <button class="btn" type="button" id="tryBtn">Eerst zelf uitproberen</button>
       <button class="btn" type="button" id="dlBtn">JSON downloaden</button>
       <button class="btn danger" type="button" id="discardBtn">Weggooien</button>
     </div>
-    <p class="hint">Online zetten bewaart het hoofdstuk in de repo (<code>${esc(cfg.repo)}</code>). GitHub Pages heeft daarna ongeveer een minuut nodig; op dit toestel staat het er meteen.</p>
+    <p class="hint">Online zetten bewaart het hoofdstuk in de repo. GitHub Pages heeft daarna ongeveer een minuut nodig; op dit toestel staat het er meteen.</p>
     <p class="status" id="pStatus" role="status"></p>`;
   box.hidden = false;
 
   box.oninput = e => {
     const k = e.target.dataset.m;
     if (!k) return;
-    draft[k] = k === "perOnderdeel" ? Math.min(10, Math.max(1, Number(e.target.value) || 4)) : e.target.value.trim();
+    draft[k] = e.target.value.trim();
     if (["vak", "graad", "nr"].includes(k)) draft.id = chapterId(draft.vak, draft.graad, draft.nr);
     lsSet(LS_DRAFT, draft);
     const code = box.querySelector("code");
     if (code) code.textContent = `data/${draft.id}.json`;
   };
-  box.onchange = e => { if (e.target.dataset.m === "perOnderdeel") renderReview(); };
   box.onclick = e => {
     const t = e.target;
     if (t.dataset.rmq !== undefined) {
@@ -513,9 +275,11 @@ function checkDraft() {
   return true;
 }
 
+function chapterOnly(d) { const { voorstel, ...c } = d; return c; }
+
 function download() {
   if (!checkDraft()) return;
-  const blob = new Blob([serializeChapter(draft)], { type: "application/json" });
+  const blob = new Blob([serializeChapter(chapterOnly(draft))], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = draft.id + ".json";
@@ -526,127 +290,81 @@ function download() {
 function tryLocal() {
   if (!checkDraft()) return;
   const local = lsGet(LS_LOCAL, {});
-  local[draft.id] = { chapter: draft, published: false };
+  local[draft.id] = { chapter: chapterOnly(draft), published: false };
   lsSet(LS_LOCAL, local);
   clearCatalogCache();
   location.hash = "#/toets/" + encodeURIComponent(draft.id);
 }
 
-/* ---------- GitHub ---------- */
-
-function b64encode(str) {
-  const bytes = new TextEncoder().encode(str);
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(bin);
-}
-function b64decode(b64) {
-  const bin = atob(b64.replace(/\s/g, ""));
-  return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
-}
-
-async function gh(path, opts = {}) {
-  if (!cfg.githubToken) throw new Error("Vul eerst een GitHub-token in bij Instellingen.");
-  const r = await fetch(`https://api.github.com/repos/${cfg.repo}${path}`, {
-    ...opts,
-    headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${cfg.githubToken}`, "X-GitHub-Api-Version": "2022-11-28", ...(opts.body ? { "Content-Type": "application/json" } : {}) }
-  });
-  if (r.status === 404 && opts.allow404) return null;
-  if (!r.ok) {
-    let detail = "";
-    try { detail = (await r.json()).message; } catch {}
-    if (r.status === 401) throw new Error("Het GitHub-token klopt niet of is verlopen.");
-    if (r.status === 403) throw new Error("Het GitHub-token mag niet schrijven in deze repo. Geef het 'Contents: Read and write'.");
-    if (r.status === 404) throw new Error(`Repo of branch niet gevonden (${cfg.repo}, ${cfg.branch}), of het token heeft er geen toegang toe.`);
-    if (r.status === 409) { const e = new Error("conflict"); e.conflict = true; throw e; }
-    throw new Error(`GitHub gaf een fout (${r.status}): ${detail}`);
-  }
-  return r.status === 204 ? null : r.json();
-}
-
-const ref = () => `?ref=${encodeURIComponent(cfg.branch)}`;
-
-async function getFile(path) {
-  const f = await gh(`/contents/${path}${ref()}`, { allow404: true });
-  return f ? { sha: f.sha, text: b64decode(f.content) } : null;
-}
-
-async function putFile(path, text, sha, message) {
-  return gh(`/contents/${path}`, { method: "PUT", body: JSON.stringify({ message, content: b64encode(text), branch: cfg.branch, ...(sha ? { sha } : {}) }) });
-}
-
-// Catalogus aanpassen; bij een conflict (iemand anders schreef net) één keer opnieuw.
-async function updateCatalog(change, message) {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const f = await getFile("data/catalog.json");
-    const cat = f ? JSON.parse(f.text) : { hoofdstukken: [] };
-    cat.hoofdstukken = sortCatalog(change(cat.hoofdstukken || []));
-    try { return await putFile("data/catalog.json", JSON.stringify(cat, null, 2) + "\n", f?.sha, message); }
-    catch (e) { if (!e.conflict || attempt) throw e; }
-  }
-}
-
-async function testConnection() {
-  readCfg();
-  lsSet(LS_CFG, cfg);
-  const lines = [];
-  status("cStatus", `<span class="spin"></span>Testen…`);
-  try {
-    if (!cfg.githubToken) lines.push("GitHub: geen token ingevuld.");
-    else {
-      const repo = await gh("");
-      await gh(`/branches/${encodeURIComponent(cfg.branch)}`);
-      lines.push(repo.permissions?.push === false ? "GitHub: verbonden, maar het token mag niet schrijven." : `GitHub: in orde (${repo.full_name}, branch ${cfg.branch}).`);
-    }
-  } catch (e) { lines.push("GitHub: " + e.message); }
-  try {
-    if (!cfg.anthropicKey) lines.push("Claude: geen sleutel ingevuld.");
-    else {
-      const { default: Anthropic } = await import(SDK_URL);
-      const client = new Anthropic({ apiKey: cfg.anthropicKey, dangerouslyAllowBrowser: true });
-      await client.models.retrieve(MODEL);
-      lines.push("Claude: in orde.");
-    }
-  } catch (e) { lines.push("Claude: " + friendlyError(e)); }
-  const bad = lines.some(l => !/in orde/.test(l));
-  status("cStatus", lines.map(esc).join("\n"), bad ? "err" : "ok");
-}
-
-async function publish(btn) {
+async function publish(btn, overschrijven = false) {
   if (!checkDraft()) return;
-  readCfg();
-  if (!cfg.githubToken) { $("settings").open = true; return status("pStatus", "Vul eerst een GitHub-token in bij Instellingen.", "err"); }
   btn.disabled = true;
+  status("pStatus", `<span class="spin"></span>Online zetten…`);
   try {
-    status("pStatus", `<span class="spin"></span>Controleren…`);
-    const path = `data/${draft.id}.json`;
-    const existing = await getFile(path);
-    if (existing && !confirm(`Er bestaat al een hoofdstuk met deze naam (${path}). Overschrijven?`)) { status("pStatus", "Niet online gezet."); return; }
-    const label = `${draft.vak} ${draft.graad} H${draft.nr}`.replace(/\s+/g, " ");
-    status("pStatus", `<span class="spin"></span>Hoofdstuk opslaan…`);
-    await putFile(path, serializeChapter(draft), existing?.sha, `${existing ? "Bijwerken" : "Toevoegen"}: ${label} ${draft.titel} (${draft.vragen.length} vragen)`);
-    status("pStatus", `<span class="spin"></span>Lijst met hoofdstukken bijwerken…`);
-    const entry = catalogEntry(draft);
-    await updateCatalog(list => [...list.filter(h => h.id !== draft.id), entry], `Catalogus: ${label} ${draft.titel}`);
-
+    await api("/hoofdstukken", { method: "POST", admin: true, body: { hoofdstuk: chapterOnly(draft), voorstel: draft.voorstel || null, overschrijven } });
     const local = lsGet(LS_LOCAL, {});
-    local[draft.id] = { chapter: draft, published: true };
+    local[draft.id] = { chapter: chapterOnly(draft), published: true };
     lsSet(LS_LOCAL, local);
     clearCatalogCache();
     const id = draft.id;
     draft = null;
     lsDel(LS_DRAFT);
-    renderReview();
-    status("gStatus", `Online gezet. Over ongeveer een minuut staat het voor iedereen op de site. <a href="#/toets/${encodeURIComponent(id)}">Toets openen</a>`, "ok");
-    files = [];
-    renderFiles();
+    await renderAdmin(root);
+    status("eStatus", `Online gezet. Over ongeveer een minuut staat het voor iedereen op de site. <a href="#/toets/${encodeURIComponent(id)}">Toets openen</a>`, "ok");
+    $("existing").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
-    status("pStatus", esc(e.message), "err");
-  } finally { btn.disabled = false; }
+    btn.disabled = false;
+    if (e.status === 409 && !overschrijven) {
+      if (confirm(`Er bestaat al een hoofdstuk data/${draft.id}.json. Overschrijven?`)) return publish(btn, true);
+      return status("pStatus", "Niet online gezet. Pas het vak, jaar of hoofdstuknummer aan voor een nieuw hoofdstuk.");
+    }
+    handle(e, "pStatus");
+  }
+}
+
+/* ---------- Bestaande hoofdstukken ---------- */
+
+async function renderExisting() {
+  const box = $("existing");
+  const cat = await loadCatalog(true).catch(() => []);
+  box.innerHTML = `<h2>Hoofdstukken</h2>
+    ${cat.length ? `<ul class="admlist">${cat.map(h => `<li><span><b>${esc(h.vak)}</b> · ${esc([h.graad, h.nr ? "H" + h.nr : ""].filter(Boolean).join(" "))} ${esc(h.titel)} <span class="muted">(${h.vragen} vragen${h.lokaal ? ", " + esc(h.lokaal) : ""})</span></span>
+      <span class="row"><a class="btn small" href="#/toets/${encodeURIComponent(h.id)}">Openen</a><button class="btn small" type="button" data-edit="${esc(h.id)}">Bewerken</button><button class="btn small danger" type="button" data-del="${esc(h.id)}">Verwijderen</button></span></li>`).join("")}</ul>` : `<p class="hint">Nog geen hoofdstukken.</p>`}
+    <p class="hint">Een kant-en-klare vragenbank? <button type="button" class="linkbtn" id="jsonBtn">Laad een JSON-bestand</button></p>
+    <input type="file" id="fJson" accept="application/json,.json" hidden>
+    <p class="status" id="eStatus" role="status"></p>`;
+  box.onclick = e => {
+    if (e.target.dataset.del) removeChapter(e.target.dataset.del, e.target);
+    if (e.target.dataset.edit) editChapter(e.target.dataset.edit);
+    if (e.target.id === "jsonBtn") $("fJson").click();
+  };
+  $("fJson").onchange = importJson;
+}
+
+function replaceDraft(c, msg) {
+  if (draft && !confirm("Er staat nog een niet-opgeslagen vragenbank klaar. Die wordt vervangen. Doorgaan?")) return;
+  draft = c;
+  lsSet(LS_DRAFT, draft);
+  renderReview();
+  if (msg) status("pStatus", msg, "ok");
+  $("review").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function importJson() {
+  const f = $("fJson").files[0];
+  $("fJson").value = "";
+  if (!f) return;
+  try {
+    const c = JSON.parse(await f.text());
+    const errs = validateChapter(c);
+    if (errs.length) throw new Error(errs.join("\n"));
+    replaceDraft(c, `${esc(f.name)} geladen: ${c.vragen.length} vragen.`);
+  } catch (e) {
+    status("eStatus", "Dit bestand is geen geldige vragenbank:\n" + esc(e.message), "err");
+  }
 }
 
 async function editChapter(id) {
-  if (draft && !confirm("Er staat nog een niet-opgeslagen vragenbank klaar. Die wordt vervangen. Doorgaan?")) return;
   try {
     const local = lsGet(LS_LOCAL, {});
     let c = local[id]?.chapter;
@@ -655,10 +373,7 @@ async function editChapter(id) {
       const r = await fetch(cat.find(h => h.id === id).bestand, { cache: "no-cache" });
       c = await r.json();
     }
-    draft = c;
-    lsSet(LS_DRAFT, draft);
-    renderReview();
-    $("review").scrollIntoView({ behavior: "smooth", block: "start" });
+    replaceDraft(c);
   } catch (e) { status("eStatus", "Kon dit hoofdstuk niet openen.", "err"); }
 }
 
@@ -668,23 +383,61 @@ async function removeChapter(id, btn) {
     delete local[id];
     lsSet(LS_LOCAL, local);
     clearCatalogCache();
-    return renderAdmin(root);
+    return renderExisting();
   }
   if (!confirm(`Hoofdstuk "${id}" voor iedereen van de site verwijderen? De vragen blijven in de git-geschiedenis.`)) return;
-  readCfg();
   btn.disabled = true;
+  status("eStatus", `<span class="spin"></span>Verwijderen…`);
   try {
-    status("eStatus", `<span class="spin"></span>Verwijderen…`);
-    await updateCatalog(list => list.filter(h => h.id !== id), `Catalogus: ${id} verwijderd`);
-    const f = await getFile(`data/${id}.json`);
-    if (f) await gh(`/contents/data/${id}.json`, { method: "DELETE", body: JSON.stringify({ message: `Verwijderen: ${id}`, sha: f.sha, branch: cfg.branch }) });
+    await api(`/hoofdstukken/${encodeURIComponent(id)}`, { method: "DELETE", admin: true });
     delete local[id];
     lsSet(LS_LOCAL, local);
     clearCatalogCache();
-    await renderAdmin(root);
+    await renderExisting();
     status("eStatus", "Verwijderd. Over ongeveer een minuut is het ook online weg.", "ok");
-  } catch (e) {
-    status("eStatus", esc(e.message), "err");
-    btn.disabled = false;
-  }
+  } catch (e) { btn.disabled = false; handle(e, "eStatus"); }
+}
+
+/* ---------- Instellingen ---------- */
+
+async function renderSettings() {
+  const body = $("settingsBody");
+  let s;
+  try { s = await api("/instellingen", { admin: true }); }
+  catch (e) { if (e.status === 401) return renderAdmin(root); body.innerHTML = `<p class="status err">${esc(e.message)}</p>`; return; }
+  body.innerHTML = `
+    <p class="hint">De sleutels staan enkel op de server en worden hier nooit volledig getoond. Laat een veld leeg om de huidige waarde te houden.</p>
+    <div class="fields">
+      <label class="field"><span>Claude API-sleutel</span>
+        <input type="password" id="sKey" autocomplete="off" spellcheck="false" placeholder="${esc(s.anthropicKey || "nog niet ingesteld")}">
+        <small>Huidig: ${s.anthropicKey ? `<code>${esc(s.anthropicKey)}</code>` : "geen"}. Maak er een op <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">platform.claude.com</a>.</small>
+      </label>
+      <label class="field"><span>GitHub-token</span>
+        <input type="password" id="sGh" autocomplete="off" spellcheck="false" placeholder="${esc(s.githubToken || "nog niet ingesteld")}">
+        <small>Huidig: ${s.githubToken ? `<code>${esc(s.githubToken)}</code>` : "geen"}. Fine-grained token, enkel deze repo, <i>Contents: Read and write</i>. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Token maken</a>.</small>
+      </label>
+      <label class="field"><span>Repository</span><input id="sRepo" spellcheck="false" value="${esc(s.repo)}"><small>eigenaar/naam</small></label>
+      <label class="field"><span>Branch</span><input id="sBranch" spellcheck="false" value="${esc(s.branch)}"><small>de branch die GitHub Pages publiceert</small></label>
+    </div>
+    <div class="row">
+      <button class="btn primary" type="button" id="sSave">Bewaren</button>
+      <button class="btn" type="button" id="sTest">Verbinding testen</button>
+    </div>
+    <p class="hint">Het admin-wachtwoord wijzig je op de server met <code>npx wrangler secret put ADMIN_PASSWORD</code> (in de map <code>worker</code>). Daarna moet je overal opnieuw inloggen.</p>
+    <p class="status" id="sStatus" role="status"></p>`;
+  $("sSave").onclick = async () => {
+    status("sStatus", `<span class="spin"></span>Bewaren…`);
+    try {
+      await api("/instellingen", { method: "PUT", admin: true, body: { anthropicKey: $("sKey").value, githubToken: $("sGh").value, repo: $("sRepo").value, branch: $("sBranch").value } });
+      await renderSettings();
+      status("sStatus", "Bewaard.", "ok");
+    } catch (e) { handle(e, "sStatus"); }
+  };
+  $("sTest").onclick = async () => {
+    status("sStatus", `<span class="spin"></span>Testen…`);
+    try {
+      const r = await api("/instellingen/test", { method: "POST", admin: true });
+      status("sStatus", `Claude: ${esc(r.claude.melding)}\nGitHub: ${esc(r.github.melding)}`, r.claude.ok && r.github.ok ? "ok" : "err");
+    } catch (e) { handle(e, "sStatus"); }
+  };
 }

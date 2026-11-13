@@ -21,7 +21,7 @@ export function chapterId(vak, graad, nr) {
 
 /**
  * Hoofdstukformaat (data/<id>.json):
- * { id, vak, graad, nr, titel, beschrijving, perOnderdeel,
+ * { id, vak, graad, nr, titel, beschrijving,
  *   onderdelen: [{ nr, titel }],
  *   vragen: [{ o: index onderdeel, v: vraag, a: [juist, fout, ...], u: uitleg }] }
  * Het eerste antwoord in `a` is altijd het juiste; de toets schudt de volgorde.

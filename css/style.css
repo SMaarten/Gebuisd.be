@@ -157,6 +157,9 @@ section.sec > h2 { font-size: 20px; display: flex; gap: 10px; align-items: basel
 @media (max-width: 480px) { .hist li { grid-template-columns: 7.5em 1fr 3.4em; } .hist li .t { display: none; } }
 @media (prefers-reduced-motion: reduce) { .track i { transition: none; } }
 
+.foot { margin: 0; text-align: center; font-size: 14px; }
+.foot a { color: var(--muted); }
+
 /* Beheer */
 .form { display: flex; flex-direction: column; gap: 14px; }
 .form h2 { font-size: 20px; }
@@ -188,3 +191,8 @@ details.settings[open] summary { margin-bottom: 12px; }
 .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }
+.vs { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+.vs .top { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
+.vs p { margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
+.tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 4px; background: var(--ok-bg); color: var(--ok); vertical-align: 1px; }
+.login { max-width: 420px; }
