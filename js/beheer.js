@@ -48,11 +48,12 @@ export async function renderAdmin(el) {
     <section class="panel form" id="proposals"><h2>Voorstellen</h2><p class="sub"><span class="spin"></span>Laden…</p></section>
     <section class="panel form" id="review" hidden></section>
     <section class="panel form" id="existing"><h2>Hoofdstukken</h2><p class="sub"><span class="spin"></span>Laden…</p></section>
+    <section class="panel form" id="users"><h2>Gebruikers</h2><p class="sub"><span class="spin"></span>Laden…</p></section>
     <details class="panel settings" id="settings"><summary>Instellingen</summary><div class="form" id="settingsBody"><p class="sub"><span class="spin"></span>Laden…</p></div></details>`;
   $("logoutBtn").onclick = () => { logout(); renderAdmin(root); };
   $("settings").ontoggle = () => { if ($("settings").open) renderSettings(); };
   renderReview();
-  await Promise.all([renderProposals(), renderExisting()]);
+  await Promise.all([renderProposals(), renderExisting(), renderUsers()]);
 }
 
 function renderLogin() {
@@ -89,7 +90,7 @@ function renderLogin() {
 async function renderProposals() {
   const box = $("proposals");
   let list;
-  try { list = await api("/voorstellen", { admin: true }); }
+  try { list = await api("/admin/voorstellen", { admin: true }); }
   catch (e) { if (e.status === 401) return renderAdmin(root); box.innerHTML = `<h2>Voorstellen</h2><p class="status err">${esc(e.message)}</p>`; return; }
   const open = list.filter(v => !v.online).length;
   box.innerHTML = `<h2>Voorstellen <span class="muted" style="font-weight:400;font-size:15px">· ${open} te behandelen</span></h2>
@@ -104,7 +105,7 @@ async function renderProposals() {
             <button class="btn small danger" type="button" data-delv="${esc(v.id)}">Verwijderen</button>
           </span>
         </div>
-        <p class="muted">Ingediend ${datum(v.ingediend)}${v.naam ? " door " + esc(v.naam) : ""}${v.online ? ` · online sinds ${datum(v.online)}` : ""}</p>
+        <p class="muted">Ingediend ${datum(v.ingediend)}${v.naam ? " door " + esc(v.naam) : ""}${v.email ? ` (${esc(v.email)})` : ""}${v.online ? ` · online sinds ${datum(v.online)}` : ""}</p>
         <p class="muted">${v.bestanden.map(f => `${esc(f.naam)} (${kb(f.grootte)})`).join(" · ")}</p>
         ${v.opmerking ? `<p>“${esc(v.opmerking)}”</p>` : ""}
         <p class="status" id="g-${esc(v.id)}" role="status" aria-live="polite"></p>
@@ -119,7 +120,7 @@ async function renderProposals() {
 async function deleteProposal(id, btn) {
   if (!confirm("Dit voorstel en de ingestuurde cursus verwijderen? Een hoofdstuk dat al online staat, blijft online.")) return;
   btn.disabled = true;
-  try { await api(`/voorstellen/${id}`, { method: "DELETE", admin: true }); await renderProposals(); }
+  try { await api(`/admin/voorstellen/${id}`, { method: "DELETE", admin: true }); await renderProposals(); }
   catch (e) { btn.disabled = false; handle(e, "g-" + id); }
 }
 
@@ -138,7 +139,7 @@ async function generate(v, btn) {
   show();
   const timer = setInterval(show, 1000);
   try {
-    const res = await api(`/voorstellen/${v.id}/genereer`, { method: "POST", admin: true, raw: true });
+    const res = await api(`/admin/voorstellen/${v.id}/genereer`, { method: "POST", admin: true, raw: true });
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = "", done = null;
@@ -301,7 +302,7 @@ async function publish(btn, overschrijven = false) {
   btn.disabled = true;
   status("pStatus", `<span class="spin"></span>Online zetten…`);
   try {
-    await api("/hoofdstukken", { method: "POST", admin: true, body: { hoofdstuk: chapterOnly(draft), voorstel: draft.voorstel || null, overschrijven } });
+    await api("/admin/hoofdstukken", { method: "POST", admin: true, body: { hoofdstuk: chapterOnly(draft), voorstel: draft.voorstel || null, overschrijven } });
     const local = lsGet(LS_LOCAL, {});
     local[draft.id] = { chapter: chapterOnly(draft), published: true };
     lsSet(LS_LOCAL, local);
@@ -389,7 +390,7 @@ async function removeChapter(id, btn) {
   btn.disabled = true;
   status("eStatus", `<span class="spin"></span>Verwijderen…`);
   try {
-    await api(`/hoofdstukken/${encodeURIComponent(id)}`, { method: "DELETE", admin: true });
+    await api(`/admin/hoofdstukken/${encodeURIComponent(id)}`, { method: "DELETE", admin: true });
     delete local[id];
     lsSet(LS_LOCAL, local);
     clearCatalogCache();
@@ -398,12 +399,48 @@ async function removeChapter(id, btn) {
   } catch (e) { btn.disabled = false; handle(e, "eStatus"); }
 }
 
+/* ---------- Gebruikers ---------- */
+
+const NAMEN = { google: "Google", microsoft: "Microsoft", smartschool: "Smartschool" };
+
+async function renderUsers() {
+  const box = $("users");
+  let list;
+  try { list = await api("/admin/gebruikers", { admin: true }); }
+  catch (e) { if (e.status === 401) return renderAdmin(root); box.innerHTML = `<h2>Gebruikers</h2><p class="status err">${esc(e.message)}</p>`; return; }
+  const lk = list.filter(u => u.rol === "leerkracht").length;
+  box.innerHTML = `<h2>Gebruikers <span class="muted" style="font-weight:400;font-size:15px">· ${list.length} account${list.length === 1 ? "" : "s"}, ${lk} leerkracht${lk === 1 ? "" : "en"}</span></h2>
+    <p class="hint">Iedereen die inlogt, is eerst leerling. Geef leerkrachten hier de rol leerkracht; dan kunnen ze klassen maken en de scores van hun klassen zien.</p>
+    ${list.length > 8 ? `<input id="uZoek" placeholder="Zoeken op naam of e-mail" style="max-width:320px">` : ""}
+    ${list.length ? `<ul class="admlist" id="uList">${list.map(u => `<li data-zoek="${esc((u.naam + " " + u.email).toLowerCase())}">
+      <span><b>${esc(u.naam || "(geen naam)")}</b> <span class="muted">· ${esc(u.email || NAMEN[u.provider] || u.provider)}${u.email ? " · " + esc(NAMEN[u.provider] || u.provider) : ""} · ${u.toetsen} toets${u.toetsen === 1 ? "" : "en"} · laatst ${datum(u.laatst)}</span></span>
+      <span class="row">
+        <select data-rol="${esc(u.id)}" aria-label="Rol van ${esc(u.naam)}"><option value="leerling" ${u.rol === "leerling" ? "selected" : ""}>leerling</option><option value="leerkracht" ${u.rol === "leerkracht" ? "selected" : ""}>leerkracht</option></select>
+        <button class="btn small danger" type="button" data-delu="${esc(u.id)}">Verwijderen</button>
+      </span></li>`).join("")}</ul>` : `<p class="hint">Nog niemand ingelogd.</p>`}
+    <p class="status" id="uStatus" role="status"></p>`;
+  const zoek = $("uZoek");
+  if (zoek) zoek.oninput = () => { const q = zoek.value.trim().toLowerCase(); box.querySelectorAll("#uList li").forEach(li => { li.hidden = q && !li.dataset.zoek.includes(q); }); };
+  box.onchange = async e => {
+    const id = e.target.dataset.rol;
+    if (!id) return;
+    try { await api(`/admin/gebruikers/${id}`, { method: "PUT", admin: true, body: { rol: e.target.value } }); status("uStatus", "Rol aangepast. De gebruiker ziet de wijziging na opnieuw laden.", "ok"); }
+    catch (err) { handle(err, "uStatus"); }
+  };
+  box.onclick = async e => {
+    const id = e.target.dataset.delu;
+    if (!id || !confirm("Dit account met alle resultaten en klassen definitief verwijderen?")) return;
+    try { await api(`/admin/gebruikers/${id}`, { method: "DELETE", admin: true }); await renderUsers(); status("uStatus", "Verwijderd.", "ok"); }
+    catch (err) { handle(err, "uStatus"); }
+  };
+}
+
 /* ---------- Instellingen ---------- */
 
 async function renderSettings() {
   const body = $("settingsBody");
   let s;
-  try { s = await api("/instellingen", { admin: true }); }
+  try { s = await api("/admin/instellingen", { admin: true }); }
   catch (e) { if (e.status === 401) return renderAdmin(root); body.innerHTML = `<p class="status err">${esc(e.message)}</p>`; return; }
   body.innerHTML = `
     <p class="hint">De sleutels staan enkel op de server en worden hier nooit volledig getoond. Laat een veld leeg om de huidige waarde te houden.</p>
@@ -423,12 +460,51 @@ async function renderSettings() {
       <button class="btn primary" type="button" id="sSave">Bewaren</button>
       <button class="btn" type="button" id="sTest">Verbinding testen</button>
     </div>
+    <h3 style="margin-top:8px">Logins voor leerlingen en leerkrachten</h3>
+    <p class="hint">Vul per dienst de gegevens in die je bij de registratie van de app krijgt. Gebruik daar als <i>redirect URI</i> exact het adres dat hieronder staat. Laat het geheim leeg om het huidige te houden. Een login zonder volledige gegevens wordt niet getoond.</p>
+    ${["google", "microsoft", "smartschool"].map(p => {
+      const x = s.login[p];
+      const titel = { google: "Google", microsoft: "Microsoft", smartschool: "Smartschool" }[p];
+      const help = {
+        google: `<a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a> → OAuth-client-ID → type <i>Webtoepassing</i>.`,
+        microsoft: `<a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noopener">Microsoft Entra</a> → App-registraties → <i>Accounts in elke organisatiemap en persoonlijke Microsoft-accounts</i>, platform <i>Web</i>.`,
+        smartschool: `Aanvragen via het <a href="https://www.smartschool.be/oauth/oauth-aanvraagformulier-voor-scholen/" target="_blank" rel="noopener">aanvraagformulier voor scholen</a>, met scope <i>userinfo</i>.`
+      }[p];
+      const actief = x.clientId && x.clientSecret && (p !== "smartschool" || x.platform);
+      return `<fieldset class="login-cfg" data-login="${p}">
+        <legend><b>${titel}</b> ${actief ? '<span class="tag">actief</span>' : '<span class="muted">· niet actief</span>'}</legend>
+        <p class="hint">${help}<br>Redirect URI: <code>${esc(x.callback)}</code></p>
+        <div class="fields">
+          ${p === "smartschool" ? `<label class="field"><span>Smartschool-adres</span><input data-k="platform" spellcheck="false" placeholder="https://school.smartschool.be" value="${esc(x.platform)}"></label>` : ""}
+          <label class="field"><span>Client ID</span><input data-k="clientId" spellcheck="false" value="${esc(x.clientId)}"></label>
+          <label class="field"><span>Client secret</span><input data-k="clientSecret" type="password" autocomplete="off" spellcheck="false" placeholder="${esc(x.clientSecret || "nog niet ingesteld")}"></label>
+        </div>
+        ${actief ? `<button type="button" class="linkbtn" data-wis="${p}">Deze login uitschakelen</button>` : ""}
+      </fieldset>`;
+    }).join("")}
+    <div class="row"><button class="btn primary" type="button" id="sSave2">Logins bewaren</button></div>
     <p class="hint">Het admin-wachtwoord wijzig je op de server met <code>npx wrangler secret put ADMIN_PASSWORD</code> (in de map <code>worker</code>). Daarna moet je overal opnieuw inloggen.</p>
     <p class="status" id="sStatus" role="status"></p>`;
+  const loginBody = () => {
+    const login = {};
+    body.querySelectorAll("[data-login]").forEach(f => {
+      const o = {};
+      f.querySelectorAll("[data-k]").forEach(i => { o[i.dataset.k] = i.value; });
+      login[f.dataset.login] = o;
+    });
+    return login;
+  };
+  body.onclick = async e => {
+    const p = e.target.dataset.wis;
+    if (!p || !confirm("Deze login uitschakelen? Wie zo inlogde, kan dan niet meer inloggen tot je hem opnieuw instelt.")) return;
+    try { await api("/admin/instellingen", { method: "PUT", admin: true, body: { login: { [p]: { wis: true } } } }); await renderSettings(); status("sStatus", "Login uitgeschakeld.", "ok"); }
+    catch (err) { handle(err, "sStatus"); }
+  };
+  $("sSave2").onclick = () => $("sSave").click();
   $("sSave").onclick = async () => {
     status("sStatus", `<span class="spin"></span>Bewaren…`);
     try {
-      await api("/instellingen", { method: "PUT", admin: true, body: { anthropicKey: $("sKey").value, githubToken: $("sGh").value, repo: $("sRepo").value, branch: $("sBranch").value } });
+      await api("/admin/instellingen", { method: "PUT", admin: true, body: { anthropicKey: $("sKey").value, githubToken: $("sGh").value, repo: $("sRepo").value, branch: $("sBranch").value, login: loginBody() } });
       await renderSettings();
       status("sStatus", "Bewaard.", "ok");
     } catch (e) { handle(e, "sStatus"); }
@@ -436,7 +512,7 @@ async function renderSettings() {
   $("sTest").onclick = async () => {
     status("sStatus", `<span class="spin"></span>Testen…`);
     try {
-      const r = await api("/instellingen/test", { method: "POST", admin: true });
+      const r = await api("/admin/instellingen/test", { method: "POST", admin: true });
       status("sStatus", `Claude: ${esc(r.claude.melding)}\nGitHub: ${esc(r.github.melding)}`, r.claude.ok && r.github.ok ? "ok" : "err");
     } catch (e) { handle(e, "sStatus"); }
   };

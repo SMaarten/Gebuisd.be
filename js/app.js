@@ -1,4 +1,5 @@
 import { lsGet, lsSet, lsDel, esc, shuffle, fmt, sortCatalog, catalogEntry } from "./util.js";
+import * as account from "./account.js";
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
 export const VRAGEN_PER_TOETS = 20;
@@ -75,12 +76,26 @@ async function route() {
   saveRun();
   clearInterval(tick);
   const h = location.hash.replace(/^#\/?/, "");
-  const [page, arg] = h.split("/");
+  const [path, query] = h.split("?");
+  const [page, arg] = path.split("/");
+  const params = new URLSearchParams(query || "");
+  account.renderAccountBar();
+  const page2 = (title, crumb) => { show("viewAdmin"); crumbs([["Alle hoofdstukken", "#/"], [crumb]]); document.title = `${title} · Gebuisd.be`; return $("viewAdmin"); };
   try {
-    if (page === "toets" && arg) {
+    if (page === "aangemeld") {
+      await account.handleCallback(page2("Inloggen", "Inloggen"), params);
+    } else if (page === "login") {
+      await account.renderLogin(page2("Inloggen", "Inloggen"), params);
+    } else if (page === "mijn") {
+      await account.renderMine(page2("Mijn account", "Mijn account"));
+    } else if (page === "klassen") {
+      await account.renderClasses(page2("Mijn klassen", "Mijn klassen"), arg ? decodeURIComponent(arg) : null);
+    } else if (page === "privacy") {
+      account.renderPrivacy(page2("Privacy", "Privacy"));
+    } else if (page === "toets" && arg) {
       show("viewTest");
       const ch = await loadChapter(decodeURIComponent(arg));
-      openTest(ch);
+      await openTest(ch);
     } else if (page === "beheer") {
       show("viewAdmin");
       crumbs([["Alle hoofdstukken", "#/"], ["Beheer"]]);
@@ -88,11 +103,9 @@ async function route() {
       const mod = await import("./beheer.js");
       await mod.renderAdmin($("viewAdmin"));
     } else if (page === "voorstel") {
-      show("viewAdmin");
-      crumbs([["Alle hoofdstukken", "#/"], ["Hoofdstuk voorstellen"]]);
-      document.title = "Hoofdstuk voorstellen · Gebuisd.be";
+      const root = page2("Hoofdstuk voorstellen", "Hoofdstuk voorstellen");
       const mod = await import("./voorstel.js");
-      mod.renderPropose($("viewAdmin"));
+      await mod.renderPropose(root);
     } else {
       show("viewHome");
       crumbs([]);
@@ -114,14 +127,20 @@ async function renderHome() {
   const el = $("catalog");
   el.innerHTML = `<p class="sub"><span class="spin"></span>Hoofdstukken laden…</p>`;
   const cat = await loadCatalog(true);
+  // laatste score per hoofdstuk: van de server als je ingelogd bent, anders uit deze browser
+  let last = {};
+  if (account.loggedIn()) {
+    try { for (const r of await account.serverHistory()) if (!last[r.hoofdstuk]) last[r.hoofdstuk] = { s: r.score, n: r.n }; } catch {}
+  } else {
+    for (const h of cat) { const x = lsGet(`gebuisd.${h.id}.hist`, [])[0]; if (x) last[h.id] = { s: x.s, n: x.n || 20 }; }
+  }
   if (!cat.length) { el.innerHTML = `<p class="panel">Er zijn nog geen hoofdstukken. Voeg er een toe.</p>`; return; }
   const byVak = new Map();
   for (const h of cat) { if (!byVak.has(h.vak)) byVak.set(h.vak, []); byVak.get(h.vak).push(h); }
   el.innerHTML = [...byVak].map(([vak, list]) => `
     <section class="vak"><h2>${esc(vak)}</h2><div class="cards">
       ${list.map(h => {
-        const hist = lsGet(`gebuisd.${h.id}.hist`, []);
-        const best = hist.length ? ` · laatste ${hist[0].s}/${hist[0].n || 20}` : "";
+        const best = last[h.id] ? ` · laatste ${last[h.id].s}/${last[h.id].n}` : "";
         return `<a class="card" href="#/toets/${encodeURIComponent(h.id)}">
           <span class="k">${esc([h.graad, h.nr ? "Hoofdstuk " + h.nr : ""].filter(Boolean).join(" · "))}</span>
           <b>${esc(h.titel)}</b>
@@ -150,8 +169,16 @@ function migrateOldKeys() {
   lsDel("h3toets.history"); lsDel("h3toets.seen");
 }
 
-function openTest(chapter) {
+async function openTest(chapter) {
   ch = chapter;
+  if (account.loggedIn()) {
+    // vragen die je op een ander toestel al kreeg, ook hier overslaan
+    try {
+      const remote = await account.getSeen(ch.id);
+      const local = lsGet(key("seen"), []);
+      lsSet(key("seen"), [...new Set([...local, ...remote])]);
+    } catch {}
+  }
   migrateOldKeys();
   document.title = `${ch.titel} · Gebuisd.be`;
   crumbs([["Alle hoofdstukken", "#/"], [ch.vak], [ch.nr ? "Hoofdstuk " + ch.nr : ch.titel]]);
@@ -207,7 +234,9 @@ function pickQuestions() {
     }
     picked.push(...shuffle(fresh).slice(0, alloc[sec]));
   });
-  lsSet(key("seen"), seen.concat(picked));
+  const all = seen.concat(picked);
+  lsSet(key("seen"), all);
+  if (account.loggedIn()) account.putSeen(ch.id, all).catch(() => {});
   return picked;
 }
 
@@ -345,31 +374,78 @@ function submit(force) {
   if (state.limit) state.elapsed = Math.min(state.elapsed, state.limit * 60);
   state.timedOut = !!force;
   state.submitted = true;
+  const onderdelen = ch.onderdelen.map((o, sec) => {
+    let ok = 0, tot = 0;
+    state.ids.forEach((id, qi) => { if (ch.vragen[id].o === sec) { tot++; if (state.answers[qi] === 0) ok++; } });
+    return [o.nr || String(sec + 1), ok, tot];
+  }).filter(o => o[2]);
+  const entry = { d: Date.now(), s: score(), n: state.ids.length, t: Math.round(state.elapsed), o: onderdelen };
   const hist = lsGet(key("hist"), []);
-  hist.unshift({ d: Date.now(), s: score(), n: state.ids.length, t: Math.round(state.elapsed) });
+  hist.unshift(entry);
   lsSet(key("hist"), hist.slice(0, 30));
+  if (account.loggedIn()) {
+    // naar je account; lukt dat niet (geen internet), dan later opnieuw
+    const r = { hoofdstuk: ch.id, datum: entry.d, score: entry.s, n: entry.n, tijd: entry.t, onderdelen };
+    account.saveResult(r).then(renderHistory).catch(() => { const q = lsGet(LS_QUEUE, []); q.push(r); lsSet(LS_QUEUE, q); });
+  }
   saveRun();
   render();
   updateTimer();
   window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
 
-function renderHistory() {
+const LS_QUEUE = "gebuisd.wachtrij";
+
+async function flushQueue() {
+  const q = lsGet(LS_QUEUE, []);
+  if (!q.length) return;
+  const rest = [];
+  for (const r of q) { try { await account.saveResult(r); } catch (e) { if (e.status !== 400) rest.push(r); } }
+  lsSet(LS_QUEUE, rest);
+}
+
+let histReq = 0;
+async function renderHistory() {
   const el = $("hist");
+  const id = ch.id;
+  if (account.loggedIn()) {
+    // historiek van je account (alle toestellen)
+    const req = ++histReq;
+    if (!el.dataset.loaded || el.dataset.loaded !== id) el.innerHTML = `<h3>Jouw scores</h3><p class="empty"><span class="spin"></span>Laden…</p>`;
+    try {
+      await flushQueue();
+      const list = await account.serverHistory(id);
+      if (req !== histReq || !ch || ch.id !== id) return;
+      el.dataset.loaded = id;
+      if (!list.length) { el.innerHTML = `<h3>Jouw scores</h3><p class="empty">Nog geen toetsen ingediend met je account. Na het indienen verschijnt je score hier, op elk toestel.</p>`; return; }
+      const avg = list.reduce((a, r) => a + r.score / r.n, 0) / list.length * 100;
+      el.innerHTML = `<h3>Jouw scores <span class="muted" style="font-weight:400;font-size:14px">· gemiddeld ${Math.round(avg)}% over ${list.length} toets${list.length > 1 ? "en" : ""}</span></h3>
+        <ol>${list.slice(0, 10).map(r => histRow(r.datum, r.score, r.n, r.tijd)).join("")}</ol>
+        <p style="margin:10px 0 0"><a class="linkbtn" href="#/mijn">Al mijn resultaten</a></p>`;
+      return;
+    } catch (e) {
+      if (req !== histReq) return;
+      if (!account.loggedIn()) return renderHistory();  // sessie verlopen: toon lokale scores
+    }
+  }
+  el.dataset.loaded = "";
   const hist = lsGet(key("hist"), []);
+  const loginHint = account.loggedIn() ? "" : `<p class="hint" style="margin:10px 0 0"><a href="#/login">Log in</a> om je historiek op elk toestel te zien.</p>`;
   if (!hist.length) {
-    el.innerHTML = `<h3>Jouw scores</h3><p class="empty">Nog geen toetsen ingediend. Na het indienen verschijnt je score hier, zodat je je vooruitgang ziet.</p>`;
+    el.innerHTML = `<h3>Jouw scores</h3><p class="empty">Nog geen toetsen ingediend. Na het indienen verschijnt je score hier, zodat je je vooruitgang ziet.</p>${loginHint}`;
     return;
   }
   const pct = h => h.s / (h.n || 20);
   const avg = hist.reduce((a, h) => a + pct(h), 0) / hist.length * 100;
-  const rows = hist.slice(0, 10).map(h => {
-    const d = new Date(h.d);
-    const ds = d.toLocaleDateString("nl-BE", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit" });
-    return `<li><span class="muted">${ds}</span><span class="hb"><i style="width:${pct(h) * 100}%"></i></span><b>${h.s}/${h.n || 20}</b><span class="t muted">${fmt(h.t)}</span></li>`;
-  }).join("");
-  el.innerHTML = `<h3>Jouw scores <span class="muted" style="font-weight:400;font-size:14px">· gemiddeld ${Math.round(avg)}% over ${hist.length} toets${hist.length > 1 ? "en" : ""}</span></h3><ol>${rows}</ol>
-    <p style="margin:10px 0 0"><button type="button" class="linkbtn" id="clearHist">Scores wissen</button></p>`;
+  const rows = hist.slice(0, 10).map(h => histRow(h.d, h.s, h.n || 20, h.t)).join("");
+  el.innerHTML = `<h3>Jouw scores <span class="muted" style="font-weight:400;font-size:14px">· gemiddeld ${Math.round(avg)}% over ${hist.length} toets${hist.length > 1 ? "en" : ""} op dit toestel</span></h3><ol>${rows}</ol>
+    <p style="margin:10px 0 0"><button type="button" class="linkbtn" id="clearHist">Scores wissen</button></p>${loginHint}`;
+}
+
+function histRow(ts, s, n, t) {
+  const d = new Date(ts);
+  const ds = d.toLocaleDateString("nl-BE", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit" });
+  return `<li><span class="muted">${ds}</span><span class="hb"><i style="width:${s / n * 100}%"></i></span><b>${s}/${n}</b><span class="t muted">${fmt(t)}</span></li>`;
 }
 
 /* ---------- Events ---------- */

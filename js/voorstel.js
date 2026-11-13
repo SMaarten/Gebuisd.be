@@ -1,6 +1,7 @@
 // Voorstelformulier voor bezoekers: cursus insturen zonder login. De beheerder keurt het goed.
 import { lsGet, lsSet, esc } from "./util.js";
-import { api, apiUrl } from "./api.js";
+import { api, apiUrl, user } from "./api.js";
+import { loginFirst } from "./account.js";
 
 const MB = 1024 * 1024;
 const MAX_FILE = 25 * MB, MAX_TOTAL = 30 * MB, MAX_FILES = 20;
@@ -10,6 +11,17 @@ let root, files = [], busy = false;
 export function renderPropose(el) {
   root = el;
   files = [];
+  if (apiUrl() && !user()) {
+    root.innerHTML = `
+      <header class="top">
+        <span class="eyebrow">Hoofdstuk voorstellen</span>
+        <h1>Stuur je <mark>cursus</mark> in</h1>
+        <p class="sub">Om een hoofdstuk voor te stellen, moet je ingelogd zijn. Zo weet de beheerder van wie het voorstel komt.</p>
+      </header>
+      <div class="panel row"><button class="btn primary" type="button" id="loginBtn">Inloggen</button><a class="btn" href="#/">Terug</a></div>`;
+    root.querySelector("#loginBtn").onclick = () => loginFirst("#/voorstel");
+    return;
+  }
   root.innerHTML = `
     <header class="top">
       <span class="eyebrow">Hoofdstuk voorstellen</span>
@@ -41,9 +53,6 @@ export function renderPropose(el) {
       <ul class="files" id="fileList"></ul>
       <label class="field"><span>Opmerking <small>(mag leeg)</small></span>
         <textarea id="fOpm" rows="3" maxlength="2000" placeholder="bv. Paragraaf 4.5 is geen leerstof. De toets is zonder rekentoestel."></textarea>
-      </label>
-      <label class="field"><span>Je naam <small>(mag leeg, enkel zichtbaar voor de beheerder)</small></span>
-        <input id="fNaam" maxlength="80">
       </label>
       <div class="row"><button class="btn primary" type="button" id="sendBtn">Voorstel versturen</button></div>
       <p class="status" id="sStatus" role="status" aria-live="polite"></p>
@@ -106,7 +115,7 @@ async function send() {
   if (busy) return;
   const v = {
     vak: $("fVak").value.trim(), graad: $("fGraad").value.trim(), nr: $("fNr").value.trim(),
-    titel: $("fTitel").value.trim(), opmerking: $("fOpm").value.trim(), naam: $("fNaam").value.trim()
+    titel: $("fTitel").value.trim(), opmerking: $("fOpm").value.trim()
   };
   if (!v.vak || !v.nr) return status("Vul minstens het vak en het hoofdstuknummer in.", "err");
   if (!files.length) return status("Kies eerst een of meer bestanden met de leerstof.", "err");
@@ -132,19 +141,20 @@ async function send() {
       files[i].state = "uploaden…"; renderFiles();
       status(`<span class="spin"></span>Bestand ${i + 1} van ${files.length} uploaden…`);
       const b = blobs[i];
-      const res = await api("/upload", { method: "POST", body: b.blob, headers: { "Content-Type": b.type, "X-Bestandsnaam": encodeURIComponent(b.name) } });
+      const res = await api("/upload", { method: "POST", auth: true, body: b.blob, headers: { "Content-Type": b.type, "X-Bestandsnaam": encodeURIComponent(b.name) } });
       files[i].id = res.id;
       files[i].state = "klaar"; renderFiles();
       ids.push(res.id);
     }
     status(`<span class="spin"></span>Voorstel versturen…`);
-    await api("/voorstel", { method: "POST", body: { ...v, bestanden: ids } });
+    await api("/voorstel", { method: "POST", auth: true, body: { ...v, bestanden: ids } });
     root.querySelector("#form").innerHTML = `
       <h2>Bedankt!</h2>
       <p class="status ok">Je voorstel voor ${esc(v.vak)}, hoofdstuk ${esc(v.nr)} is verstuurd. Zodra de beheerder het goedkeurt, verschijnt de toets op de startpagina.</p>
       <div class="row"><a class="btn primary" href="#/">Naar de startpagina</a><button class="btn" type="button" id="again">Nog een hoofdstuk insturen</button></div>`;
     root.querySelector("#again").onclick = () => renderPropose(root);
   } catch (e) {
+    if (e.status === 401) return loginFirst("#/voorstel");
     files.forEach(x => { if (x.state === "uploaden…") x.state = "mislukt"; });
     renderFiles();
     status(esc(e.message || String(e)), "err");

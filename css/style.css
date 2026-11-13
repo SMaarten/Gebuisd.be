@@ -59,7 +59,12 @@ a { color: var(--accent); }
 
 .crumbs { font-size: 14px; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; }
 .crumbs a { color: var(--muted); }
-.crumbs:empty { display: none; }
+.topbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; min-height: 22px; }
+.topbar .crumbs { flex: 1 1 auto; }
+.account { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; font-size: 14px; flex: 0 1 auto; min-width: 0; margin-left: auto; }
+.account .acc { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account .acc { color: var(--ink); font-weight: 700; text-decoration: none; border: 1px solid var(--line); background: var(--sheet); border-radius: 999px; padding: 3px 12px; }
+.account .acc:hover { border-color: var(--accent); }
 
 .panel { background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
 .msg { margin: 0; }
@@ -196,3 +201,16 @@ details.settings[open] summary { margin-bottom: 12px; }
 .vs p { margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
 .tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 4px; background: var(--ok-bg); color: var(--ok); vertical-align: 1px; }
 .login { max-width: 420px; }
+.provider { text-align: center; }
+.prose h3 { font-size: 17px; margin: 14px 0 4px; }
+.prose h3:first-child { margin-top: 0; }
+.prose p, .prose ul { margin: 0 0 8px; }
+.tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.overview { border-collapse: collapse; font-size: 14px; min-width: 100%; }
+.overview th, .overview td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.overview thead th { font-family: var(--font-display); }
+.overview tbody th { font-weight: 700; }
+code { font-size: .95em; background: var(--grid); padding: 1px 5px; border-radius: 4px; }
+fieldset.login-cfg { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px 14px; margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+fieldset.login-cfg legend { padding: 0 6px; }
+fieldset.login-cfg code { overflow-wrap: anywhere; }

@@ -1,33 +1,38 @@
 // Gebuisd.be API (Cloudflare Worker)
 //
-// Bewaart de geheime sleutels (Claude en GitHub) zodat ze nooit in de browser van een bezoeker komen.
-//  - bezoekers: bestanden uploaden en een hoofdstuk voorstellen, zonder login
-//  - admin (wachtwoord): voorstellen bekijken, vragen laten maken, online zetten, sleutels beheren
+// Bewaart de geheime sleutels (Claude, GitHub, logins) zodat ze nooit in de browser van een bezoeker komen.
+//  - iedereen:      toetsen maken (dat gebeurt volledig op de website, zonder deze server)
+//  - ingelogd:      historiek op elk toestel, lid worden van een klas, een hoofdstuk voorstellen
+//  - leerkracht:    klassen maken en de resultaten van de leerlingen in die klassen bekijken
+//  - admin (wachtwoord): voorstellen behandelen, online zetten, gebruikers en sleutels beheren
 //
-// Opslag (KV):  config            sleutels, repo, branch
-//               voorstel:<id>     een ingediend voorstel
-//               upload:<fileId>   geüpload maar nog niet aan een voorstel gekoppeld (na 1 dag opgeruimd)
-//               rl:<...>          tellers tegen misbruik
+// Opslag:  KV  config            sleutels, repo, branch, logins
+//              voorstel:<id>     een ingediend voorstel
+//              upload:<fileId>   geüpload maar nog niet aan een voorstel gekoppeld (na 1 dag opgeruimd)
+//              oauth:<state>     lopende login (10 minuten)
+//              sessiesleutel     geheime sleutel voor leerlingensessies
+//              rl:<...>          tellers tegen misbruik
+//          D1  gebruikers, resultaten, gezien, klassen, leden (zie schema.sql)
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
 import { MODEL, SYSTEM, SCHEMA, taskText } from "./prompt.js";
 import { validateChapter, serializeChapter, catalogEntry, sortCatalog } from "../../js/util.js";
+import { Fout, json, ip, rateLimit, getConfig, enc, mask, clean, newId, allowedOrigins, hmacKey, signToken, verifyToken, bearer } from "./common.js";
+import * as auth from "./auth.js";
+import * as users from "./users.js";
 
 const MB = 1024 * 1024;
 const MAX_FILE = 25 * MB;
 const MAX_TOTAL = 30 * MB;
 const MAX_FILES = 20;
 const ORPHAN_AGE = 24 * 3600 * 1000;    // upload zonder voorstel: na 1 dag opruimen
-const SESSION_TTL = 7 * 24 * 3600;
+const ADMIN_TTL = 7 * 24 * 3600;
 const TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif", "text/plain"];
 
 /* ---------- Hulpfuncties ---------- */
 
-class Fout extends Error { constructor(status, msg) { super(msg); this.status = status; } }
-
 function cors(req, env) {
   const origin = req.headers.get("Origin") || "";
-  const allowed = (env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean);
-  const ok = allowed.includes(origin);
+  const ok = allowedOrigins(env).includes(origin);
   return {
     ...(ok ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}),
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -36,56 +41,20 @@ function cors(req, env) {
   };
 }
 
-const json = (data, status = 200, headers = {}) =>
-  new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...headers } });
-
-const ip = req => req.headers.get("CF-Connecting-IP") || "lokaal";
-
-async function rateLimit(env, kind, who, max, windowSec) {
-  const slot = Math.floor(Date.now() / 1000 / windowSec);
-  const k = `rl:${kind}:${who}:${slot}`;
-  const n = Number(await env.KV.get(k)) || 0;
-  if (n >= max) throw new Fout(429, "Te veel pogingen. Probeer het later opnieuw.");
-  await env.KV.put(k, String(n + 1), { expirationTtl: Math.max(60, windowSec * 2) });
-}
-
-async function getConfig(env) {
-  const c = (await env.KV.get("config", "json")) || {};
-  return { anthropicKey: "", githubToken: "", repo: env.DEFAULT_REPO || "", branch: env.DEFAULT_BRANCH || "main", ...c };
-}
-
 function claude(env, cfg) {
   if (!cfg.anthropicKey) throw new Fout(503, "De Claude-sleutel is nog niet ingesteld. De beheerder moet die eerst invullen.");
   return new Anthropic({ apiKey: cfg.anthropicKey, maxRetries: 2, ...(env.ANTHROPIC_BASE_URL ? { baseURL: env.ANTHROPIC_BASE_URL } : {}) });
 }
 
-const enc = new TextEncoder();
-const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const fromB64url = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
-
-async function sessionKey(env) {
+async function adminKey(env) {
   if (!env.ADMIN_PASSWORD) throw new Fout(503, "Er is nog geen admin-wachtwoord ingesteld op de server.");
-  // afgeleid van het wachtwoord: een nieuw wachtwoord maakt alle oude sessies ongeldig
-  return crypto.subtle.importKey("raw", await crypto.subtle.digest("SHA-256", enc.encode("sessie:" + env.ADMIN_PASSWORD)), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
-}
-
-async function makeToken(env) {
-  const exp = Math.floor(Date.now() / 1000) + SESSION_TTL;
-  const body = b64url(enc.encode(JSON.stringify({ exp })));
-  const sig = await crypto.subtle.sign("HMAC", await sessionKey(env), enc.encode(body));
-  return { token: body + "." + b64url(sig), verloopt: exp * 1000 };
+  // afgeleid van het wachtwoord: een nieuw wachtwoord maakt alle oude admin-sessies ongeldig
+  return hmacKey(await crypto.subtle.digest("SHA-256", enc.encode("sessie:" + env.ADMIN_PASSWORD)));
 }
 
 async function requireAdmin(req, env) {
-  const auth = req.headers.get("Authorization") || "";
-  const [body, sig] = auth.replace(/^Bearer\s+/i, "").split(".");
-  if (body && sig) {
-    try {
-      const ok = await crypto.subtle.verify("HMAC", await sessionKey(env), fromB64url(sig), enc.encode(body));
-      if (ok && JSON.parse(new TextDecoder().decode(fromB64url(body))).exp * 1000 > Date.now()) return;
-    } catch (e) { if (e instanceof Fout) throw e; }
-  }
-  throw new Fout(401, "Niet ingelogd of je sessie is verlopen.");
+  const p = await verifyToken(await adminKey(env), bearer(req));
+  if (!p || !p.admin) throw new Fout(401, "Niet ingelogd of je sessie is verlopen.");
 }
 
 async function sameSecret(a, b) {
@@ -93,14 +62,10 @@ async function sameSecret(a, b) {
   return crypto.subtle.timingSafeEqual(ha, hb);
 }
 
-const mask = s => s ? s.slice(0, 7) + "…" + s.slice(-4) : "";
-const clean = (s, n) => String(s ?? "").replace(/[\u0000-\u0008\u000b-\u001f]/g, "").trim().slice(0, n);
-const newId = () => Date.now().toString(36) + "-" + crypto.randomUUID().slice(0, 8);
+/* ---------- Ingelogde gebruikers: voorstellen ---------- */
 
-/* ---------- Bezoekers ---------- */
-
-async function upload(req, env) {
-  await rateLimit(env, "upload", ip(req), 30, 3600);
+async function upload(req, env, u) {
+  await rateLimit(env, "upload", u.id, 30, 3600);
   const type = (req.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
   if (!TYPES.includes(type)) throw new Fout(415, "Dit bestandstype wordt niet ondersteund. Gebruik PDF, JPG, PNG of tekst.");
   const len = Number(req.headers.get("Content-Length") || 0);
@@ -118,43 +83,45 @@ async function upload(req, env) {
   let meta;
   try { meta = await claude(env, cfg).files.upload({ file: await toFile(buf, naam, { type }) }); }
   catch (e) { console.error(e); throw new Fout(503, "Het uploaden lukt nu even niet. Probeer het later opnieuw."); }
-  const info = { id: meta.id, naam, grootte: buf.byteLength, type, ts: Date.now() };
+  const info = { id: meta.id, naam, grootte: buf.byteLength, type, ts: Date.now(), door: u.id };
   await env.KV.put(`upload:${meta.id}`, JSON.stringify(info));
-  return json(info, 201);
+  return json({ id: info.id, naam, grootte: info.grootte }, 201);
 }
 
-async function propose(req, env) {
-  await rateLimit(env, "voorstel", ip(req), 5, 3600);
+async function propose(req, env, u) {
+  await rateLimit(env, "voorstel", u.id, 5, 3600);
   await rateLimit(env, "voorstel-dag", "alle", 50, 24 * 3600);
   const b = await req.json().catch(() => ({}));
   const v = {
     vak: clean(b.vak, 60), graad: clean(b.graad, 30), nr: clean(b.nr, 10), titel: clean(b.titel, 120),
-    opmerking: clean(b.opmerking, 2000), naam: clean(b.naam, 80)
+    opmerking: clean(b.opmerking, 2000)
   };
   if (!v.vak || !v.nr) throw new Fout(400, "Vul minstens het vak en het hoofdstuknummer in.");
   const ids = [...new Set(Array.isArray(b.bestanden) ? b.bestanden : [])].slice(0, MAX_FILES + 1);
   if (!ids.length) throw new Fout(400, "Voeg minstens één bestand toe.");
   if (ids.length > MAX_FILES) throw new Fout(400, `Maximaal ${MAX_FILES} bestanden.`);
-  // enkel bestanden die net via /upload binnenkwamen
+  // enkel bestanden die deze gebruiker net via /upload instuurde
   const bestanden = [];
   for (const id of ids) {
     const info = await env.KV.get(`upload:${String(id)}`, "json");
-    if (!info) throw new Fout(400, "Een bestand is niet (meer) gevonden. Upload het opnieuw.");
-    bestanden.push(info);
+    if (!info || info.door !== u.id) throw new Fout(400, "Een bestand is niet (meer) gevonden. Upload het opnieuw.");
+    const { door, ...f } = info;
+    bestanden.push(f);
   }
   if (bestanden.reduce((n, f) => n + f.grootte, 0) > MAX_TOTAL) throw new Fout(413, "De bestanden zijn samen te groot (max. 30 MB).");
-  const voorstel = { id: newId(), ingediend: Date.now(), ...v, bestanden };
+  const voorstel = { id: newId(), ingediend: Date.now(), ...v, naam: u.naam, email: u.email, gebruiker: u.id, bestanden };
   await env.KV.put(`voorstel:${voorstel.id}`, JSON.stringify(voorstel));
   await Promise.all(bestanden.map(f => env.KV.delete(`upload:${f.id}`)));
   return json({ ok: true, id: voorstel.id }, 201);
 }
 
-async function login(req, env) {
+async function adminLogin(req, env) {
   await rateLimit(env, "login", ip(req), 10, 3600);
   const b = await req.json().catch(() => ({}));
   if (!env.ADMIN_PASSWORD) throw new Fout(503, "Er is nog geen admin-wachtwoord ingesteld op de server.");
   if (!b.wachtwoord || !(await sameSecret(b.wachtwoord, env.ADMIN_PASSWORD))) throw new Fout(401, "Verkeerd wachtwoord.");
-  return json(await makeToken(env));
+  const exp = Math.floor(Date.now() / 1000) + ADMIN_TTL;
+  return json({ token: await signToken(await adminKey(env), { admin: 1, exp }), verloopt: exp * 1000 });
 }
 
 /* ---------- Admin: voorstellen ---------- */
@@ -275,9 +242,15 @@ function claudeError(e) {
 
 /* ---------- Admin: instellingen ---------- */
 
-async function showSettings(env) {
+async function showSettings(req, env) {
   const c = await getConfig(env);
-  return { anthropicKey: mask(c.anthropicKey), githubToken: mask(c.githubToken), repo: c.repo, branch: c.branch };
+  const origin = new URL(req.url).origin;
+  const login = {};
+  for (const p of auth.PROVIDERS) {
+    const x = c[p] || {};
+    login[p] = { clientId: x.clientId || "", clientSecret: mask(x.clientSecret), callback: `${origin}/auth/${p}/callback`, ...(p === "smartschool" ? { platform: x.platform || "" } : {}) };
+  }
+  return { anthropicKey: mask(c.anthropicKey), githubToken: mask(c.githubToken), repo: c.repo, branch: c.branch, login };
 }
 
 async function saveSettings(req, env) {
@@ -285,16 +258,30 @@ async function saveSettings(req, env) {
   const c = await getConfig(env);
   if (typeof b.anthropicKey === "string" && b.anthropicKey.trim()) c.anthropicKey = b.anthropicKey.trim();
   if (typeof b.githubToken === "string" && b.githubToken.trim()) c.githubToken = b.githubToken.trim();
-  if (b.wisAnthropic) c.anthropicKey = "";
-  if (b.wisGithub) c.githubToken = "";
   if (typeof b.repo === "string" && b.repo.trim()) {
     const repo = b.repo.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
     if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Fout(400, "Repository moet de vorm eigenaar/naam hebben.");
     c.repo = repo;
   }
   if (typeof b.branch === "string" && b.branch.trim()) c.branch = b.branch.trim();
+  // logins: een leeg geheim behoudt het oude; "wis" schakelt de login uit
+  for (const p of auth.PROVIDERS) {
+    const x = b.login?.[p];
+    if (!x) continue;
+    const cur = { ...(c[p] || {}) };
+    if (x.wis) { c[p] = { clientId: "", clientSecret: "", ...(p === "smartschool" ? { platform: "" } : {}) }; continue; }
+    if (typeof x.clientId === "string") cur.clientId = x.clientId.trim();
+    if (typeof x.clientSecret === "string" && x.clientSecret.trim()) cur.clientSecret = x.clientSecret.trim();
+    if (p === "smartschool" && typeof x.platform === "string") {
+      let pl = x.platform.trim().replace(/\/+$/, "");
+      if (pl && !/^https:\/\//.test(pl)) pl = "https://" + pl;
+      if (pl && !/^https:\/\/[\w-]+\.smartschool\.be$/.test(pl)) throw new Fout(400, "Het Smartschool-adres moet de vorm https://<school>.smartschool.be hebben.");
+      cur.platform = pl;
+    }
+    c[p] = cur;
+  }
   await env.KV.put("config", JSON.stringify(c));
-  return showSettings(env);
+  return showSettings(req, env);
 }
 
 async function testSettings(env) {
@@ -408,24 +395,52 @@ async function handle(req, env, ctx) {
   const m = req.method;
   let r;
 
+  // ---- iedereen ----
   if (m === "GET" && p === "/status") {
     const c = await getConfig(env);
-    return json({ ok: true, voorstellen: !!c.anthropicKey });
+    return json({ ok: true, voorstellen: !!c.anthropicKey, logins: auth.enabledProviders(c) });
   }
-  if (m === "POST" && p === "/upload") return upload(req, env);
-  if (m === "POST" && p === "/voorstel") return propose(req, env);
-  if (m === "POST" && p === "/login") return login(req, env);
+  if (m === "POST" && p === "/login") return adminLogin(req, env);
+  if ((r = p.match(/^\/auth\/(\w+)\/start$/)) && m === "GET") return auth.start(req, env, r[1]);
+  if ((r = p.match(/^\/auth\/(\w+)\/callback$/)) && m === "GET") return auth.callback(req, env, r[1]);
 
+  // ---- ingelogde leerling of leerkracht ----
+  if (!p.startsWith("/admin/")) {
+    const u = await auth.currentUser(req, env);
+    if (m === "GET" && p === "/ik") return json(await users.me(env, u));
+    if (m === "DELETE" && p === "/ik") return json(await users.deleteMe(env, u));
+    if (m === "GET" && p === "/historiek") return json(await users.history(env, u, url.searchParams.get("hoofdstuk")));
+    if (m === "POST" && p === "/historiek") return json(await users.addResult(env, u, await req.json().catch(() => null)), 201);
+    if (m === "POST" && p === "/historiek/import") return json(await users.importResults(env, u, await req.json().catch(() => null)));
+    if ((r = p.match(/^\/gezien\/([\w-]+)$/)) && m === "GET") return json(await users.getSeen(env, u, r[1]));
+    if ((r = p.match(/^\/gezien\/([\w-]+)$/)) && m === "PUT") return json(await users.putSeen(env, u, r[1], await req.json().catch(() => null)));
+    if (m === "POST" && p === "/klassen/lid") return json(await users.joinClass(env, u, await req.json().catch(() => null)));
+    if ((r = p.match(/^\/klassen\/([\w-]+)\/lid$/)) && m === "DELETE") return json(await users.leaveClass(env, u, r[1]));
+    if (m === "GET" && p === "/klassen") return json(await users.myClasses(env, u));
+    if (m === "POST" && p === "/klassen") return json(await users.createClass(env, u, await req.json().catch(() => null)), 201);
+    if ((r = p.match(/^\/klassen\/([\w-]+)$/)) && m === "GET") return json(await users.classOverview(env, u, r[1]));
+    if ((r = p.match(/^\/klassen\/([\w-]+)$/)) && m === "DELETE") return json(await users.deleteClass(env, u, r[1]));
+    if ((r = p.match(/^\/klassen\/([\w-]+)\/leden\/([\w-]+)$/)) && m === "DELETE") return json(await users.removeMember(env, u, r[1], r[2]));
+    if (m === "POST" && p === "/upload") return upload(req, env, u);
+    if (m === "POST" && p === "/voorstel") return propose(req, env, u);
+    throw new Fout(404, "Niet gevonden.");
+  }
+
+  // ---- admin ----
   await requireAdmin(req, env);
-  if (m === "GET" && p === "/sessie") return json({ ok: true });
-  if (m === "GET" && p === "/voorstellen") return json(await listProposals(env, ctx));
-  if ((r = p.match(/^\/voorstellen\/([\w-]+)$/)) && m === "DELETE") { await deleteProposal(env, r[1]); return json({ ok: true }); }
-  if ((r = p.match(/^\/voorstellen\/([\w-]+)\/genereer$/)) && m === "POST") return generate(env, r[1], ctx);
-  if (m === "GET" && p === "/instellingen") return json(await showSettings(env));
-  if (m === "PUT" && p === "/instellingen") return json(await saveSettings(req, env));
-  if (m === "POST" && p === "/instellingen/test") return json(await testSettings(env));
-  if (m === "POST" && p === "/hoofdstukken") return json(await publish(req, env));
-  if ((r = p.match(/^\/hoofdstukken\/([\w-]+)$/)) && m === "DELETE") return json(await removeChapter(env, r[1]));
+  const ap = p.slice("/admin".length);
+  if (m === "GET" && ap === "/sessie") return json({ ok: true });
+  if (m === "GET" && ap === "/voorstellen") return json(await listProposals(env, ctx));
+  if ((r = ap.match(/^\/voorstellen\/([\w-]+)$/)) && m === "DELETE") { await deleteProposal(env, r[1]); return json({ ok: true }); }
+  if ((r = ap.match(/^\/voorstellen\/([\w-]+)\/genereer$/)) && m === "POST") return generate(env, r[1], ctx);
+  if (m === "GET" && ap === "/instellingen") return json(await showSettings(req, env));
+  if (m === "PUT" && ap === "/instellingen") return json(await saveSettings(req, env));
+  if (m === "POST" && ap === "/instellingen/test") return json(await testSettings(env));
+  if (m === "POST" && ap === "/hoofdstukken") return json(await publish(req, env));
+  if ((r = ap.match(/^\/hoofdstukken\/([\w-]+)$/)) && m === "DELETE") return json(await removeChapter(env, r[1]));
+  if (m === "GET" && ap === "/gebruikers") return json(await users.listUsers(env));
+  if ((r = ap.match(/^\/gebruikers\/([\w-]+)$/)) && m === "PUT") return json(await users.setRole(env, r[1], await req.json().catch(() => null)));
+  if ((r = ap.match(/^\/gebruikers\/([\w-]+)$/)) && m === "DELETE") return json(await users.deleteUser(env, r[1]));
   throw new Fout(404, "Niet gevonden.");
 }
 

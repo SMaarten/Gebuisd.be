@@ -9,6 +9,15 @@ kv_namespaces = [
   { binding = "KV", id = "de2d68e50ba343ada6c67d40206ca5e7" }
 ]
 
+# Database voor leerlingen, resultaten en klassen. Maak aan met:
+#   npx wrangler d1 create gebuisd
+# vervang het id hieronder, en maak de tabellen aan met:
+#   npx wrangler d1 execute gebuisd --remote --file schema.sql
+[[d1_databases]]
+binding = "DB"
+database_name = "gebuisd"
+database_id = "bc1acee9-40f7-4a74-a615-0bae788242d3"
+
 [vars]
 # Websites die de API mogen gebruiken (komma-gescheiden)
 ALLOWED_ORIGINS = "https://gebuisd.be,https://www.gebuisd.be,https://smaarten.github.io,http://localhost:8765"
